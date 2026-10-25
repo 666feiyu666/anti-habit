@@ -1,6 +1,6 @@
-import { getDatabase } from '../../../utils/db'
-import { getEssayEntries } from '../../../utils/essays'
-import { requireActiveGoal } from '../../../utils/goals'
+import { getDatabase } from '../../../../utils/db'
+import { getEssayEntries } from '../../../../utils/essays'
+import { requireActiveGoal } from '../../../../utils/goals'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

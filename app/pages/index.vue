@@ -144,14 +144,9 @@ function openReaderDate(date: string) {
   openDay(date)
 }
 
-async function openEssay(goal: GoalSummary) {
-  readerGoal.value = goal
-  readerOpen.value = true
-  essayEntries.value = []
+async function loadEssay(goal: GoalSummary) {
   essayPending.value = true
   essayError.value = ''
-
-  await selectGoal(goal)
 
   try {
     const result = await $fetch<{ entries: EssayEntry[] }>(`/api/goals/${goal.id}/essays`)
@@ -161,6 +156,19 @@ async function openEssay(goal: GoalSummary) {
   } finally {
     essayPending.value = false
   }
+}
+
+async function openEssay(goal: GoalSummary) {
+  readerGoal.value = goal
+  readerOpen.value = true
+  essayEntries.value = []
+  await selectGoal(goal)
+  await loadEssay(goal)
+}
+
+async function handleEssayImported() {
+  await Promise.all([refresh(), refreshEntries()])
+  if (readerGoal.value) await loadEssay(readerGoal.value)
 }
 
 function previousMonth() {
@@ -428,7 +436,9 @@ onMounted(() => {
       :entries="essayEntries"
       :pending="essayPending"
       :error="essayError"
+      :fallback-date="selectedDate"
       @select-date="openReaderDate"
+      @imported="handleEssayImported"
     />
   </div>
 </template>

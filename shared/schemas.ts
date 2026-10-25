@@ -52,3 +52,29 @@ export const upsertEntrySchema = z.object({
 export const dateOnlySchema = z
   .string()
   .refine(value => /^\d{4}-\d{2}-\d{2}$/.test(value), '日期格式必须是 YYYY-MM-DD')
+
+export const importEssayEntrySchema = z.object({
+  entryDate: dateOnlySchema,
+  status: entryStatusSchema,
+  reflection: z
+    .string()
+    .trim()
+    .min(1, '导入的正文不能为空')
+    .max(REFLECTION_MAX_LENGTH, `正文不能超过 ${REFLECTION_MAX_LENGTH} 个字符`),
+  linkedEntryDates: z
+    .array(dateOnlySchema)
+    .optional()
+    .default([]),
+})
+
+export const importEssaySchema = z.object({
+  entries: z
+    .array(importEssayEntrySchema)
+    .min(1, '没有可导入的正文')
+    .max(1000, '一次最多导入 1000 天'),
+}).transform(({ entries }) => ({
+  entries: entries.map(entry => ({
+    ...entry,
+    linkedEntryDates: [...new Set(entry.linkedEntryDates)],
+  })),
+}))

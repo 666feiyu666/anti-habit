@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { EntryStatus, EssayEntry } from '#shared/types'
 import { REFLECTION_MAX_LENGTH } from '#shared/schemas'
+import { renderMarkdown } from '~/utils/markdown'
 
 const props = defineProps<{
   idPrefix: string
@@ -17,6 +18,8 @@ const linkedEntryIds = defineModel<string[]>('linkedEntryIds', { required: true 
 
 const reflectionId = computed(() => `reflection-${props.idPrefix}`)
 const reflectionHelpId = computed(() => `reflection-help-${props.idPrefix}`)
+const mode = ref<'write' | 'preview'>('write')
+const renderedReflection = computed(() => renderMarkdown(reflection.value))
 
 function statusClasses(value: EntryStatus): string {
   if (status.value === value) {
@@ -66,7 +69,7 @@ function statusClasses(value: EntryStatus): string {
 
     <div>
       <div class="flex items-baseline justify-between gap-3">
-        <label :for="reflectionId" class="text-sm font-medium text-ink">
+        <label :for="mode === 'write' ? reflectionId : undefined" class="text-sm font-medium text-ink">
           这一天想到什么？
           <span class="font-normal text-ink-faint">选填</span>
         </label>
@@ -77,7 +80,35 @@ function statusClasses(value: EntryStatus): string {
       <p :id="reflectionHelpId" class="mt-1 text-xs leading-5 text-ink-soft">
         可以记下当时发生的事，也可以继续以前的想法。
       </p>
+
+      <div class="mt-2 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-0.5 rounded-md border border-rule p-0.5" role="group" aria-label="正文显示方式">
+          <button
+            type="button"
+            class="rounded-sm px-2.5 py-1 text-xs transition-colors motion-reduce:transition-none"
+            :class="mode === 'write' ? 'bg-paper text-ink' : 'text-ink-faint hover:text-ink'"
+            :aria-pressed="mode === 'write'"
+            :disabled="busy"
+            @click="mode = 'write'"
+          >
+            写作
+          </button>
+          <button
+            type="button"
+            class="rounded-sm px-2.5 py-1 text-xs transition-colors motion-reduce:transition-none"
+            :class="mode === 'preview' ? 'bg-paper text-ink' : 'text-ink-faint hover:text-ink'"
+            :aria-pressed="mode === 'preview'"
+            :disabled="busy"
+            @click="mode = 'preview'"
+          >
+            预览
+          </button>
+        </div>
+        <span class="text-xs text-ink-faint">支持 Markdown</span>
+      </div>
+
       <textarea
+        v-if="mode === 'write'"
         :id="reflectionId"
         v-model="reflection"
         class="mt-2 min-h-32 w-full resize-y rounded-md border border-rule bg-sheet px-3 py-2.5 font-serif text-[15px] leading-7 text-ink placeholder:text-ink-faint focus:border-done focus:outline-none focus:ring-2 focus:ring-done/15 disabled:opacity-60"
@@ -87,6 +118,17 @@ function statusClasses(value: EntryStatus): string {
         :aria-describedby="reflectionHelpId"
         placeholder="可以留空。"
       />
+      <div
+        v-else
+        class="mt-2 min-h-32 rounded-md border border-rule bg-sheet px-3 py-2.5"
+        role="region"
+        aria-label="正文预览"
+      >
+        <div v-if="reflection.trim()" class="essay-markdown" v-html="renderedReflection" />
+        <p v-else class="text-sm text-ink-faint">
+          还没有内容。
+        </p>
+      </div>
     </div>
 
     <EntryLinkPicker

@@ -39,3 +39,10 @@ export interface EssayEntry {
   outgoing: EssayReference[]
   incoming: EssayReference[]
 }
+
+export interface ImportedEssayEntry {
+  entryDate: string
+  status: EntryStatus
+  reflection: string
+  linkedEntryDates: string[]
+}

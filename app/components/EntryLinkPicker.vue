@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { EssayEntry } from '#shared/types'
 import { formatDayLabel } from '~/utils/date-display'
+import { markdownExcerpt } from '~/utils/markdown'
 
 const props = defineProps<{
   candidates: EssayEntry[]
@@ -80,7 +81,7 @@ function toggle(entryId: string, checked: boolean) {
               </span>
             </span>
             <span class="mt-1 line-clamp-2 block font-serif text-sm leading-6 text-ink-soft">
-              {{ item.entry.reflection }}
+              {{ markdownExcerpt(item.entry.reflection ?? '') }}
             </span>
           </span>
         </label>

@@ -79,6 +79,23 @@ async function getEssays(goalId: string): Promise<EssayEntry[]> {
   return body.entries as EssayEntry[]
 }
 
+async function importEssay(
+  goalId: string,
+  entries: Array<{
+    entryDate: string
+    status: 'completed' | 'missed'
+    reflection: string
+    linkedEntryDates?: string[]
+  }>,
+) {
+  const { response, body } = await request(`/api/goals/${goalId}/essays/import`, {
+    method: 'POST',
+    body: JSON.stringify({ entries }),
+  })
+  expect(response.status).toBe(200)
+  return body as { imported: number }
+}
+
 describe('goals API', () => {
   it('creates a goal, trims its title, and lists it with today status', async () => {
     const title = uniqueTitle('Walk 20 Minutes')
@@ -517,5 +534,106 @@ describe('goals API', () => {
     const afterRestore = await getEssays(goal.id)
     expect(afterRestore.map(item => item.entry.id)).toEqual([late.id, early.id])
     expect(afterRestore[1]?.incoming[0]?.entryId).toBe(late.id)
+  })
+
+  it('imports multiple dated entries and links them in one transaction', async () => {
+    const goal = await createGoal(uniqueTitle('Read Before Bed'))
+
+    const result = await importEssay(goal.id, [
+      {
+        entryDate: '2026-07-14',
+        status: 'missed',
+        reflection: '第一篇。',
+      },
+      {
+        entryDate: '2026-08-11',
+        status: 'completed',
+        reflection: '第二篇。',
+        linkedEntryDates: ['2026-07-14'],
+      },
+    ])
+    expect(result.imported).toBe(2)
+
+    const essays = await getEssays(goal.id)
+    expect(essays.map(item => item.entry.entryDate)).toEqual(['2026-08-11', '2026-07-14'])
+    expect(essays[0]?.outgoing[0]?.entryDate).toBe('2026-07-14')
+    expect(essays[1]?.incoming[0]?.entryDate).toBe('2026-08-11')
+  })
+
+  it('overwrites the same date while keeping the entry id', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+    const original = await putEntry(goal.id, '2026-07-14', {
+      status: 'completed',
+      reflection: '原稿。',
+    })
+
+    await importEssay(goal.id, [{
+      entryDate: '2026-07-14',
+      status: 'missed',
+      reflection: '导入稿。',
+    }])
+
+    const entries = await getEntries(goal.id, '2026-07-14', '2026-07-14')
+    expect(entries[0]).toMatchObject({
+      id: original.id,
+      status: 'missed',
+      reflection: '导入稿。',
+    })
+  })
+
+  it('rejects invalid imports without saving any entry', async () => {
+    const goal = await createGoal(uniqueTitle('Read Before Bed'))
+
+    const missingTarget = await request(`/api/goals/${goal.id}/essays/import`, {
+      method: 'POST',
+      body: JSON.stringify({
+        entries: [
+          {
+            entryDate: '2026-07-14',
+            status: 'completed',
+            reflection: '先写一篇。',
+          },
+          {
+            entryDate: '2026-08-11',
+            status: 'completed',
+            reflection: '再写一篇。',
+            linkedEntryDates: ['2026-01-01'],
+          },
+        ],
+      }),
+    })
+    expect(missingTarget.response.status).toBe(400)
+    expect(missingTarget.body.data.code).toBe('INVALID_LINK')
+    expect(await getEssays(goal.id)).toHaveLength(0)
+
+    const duplicate = await request(`/api/goals/${goal.id}/essays/import`, {
+      method: 'POST',
+      body: JSON.stringify({
+        entries: [
+          { entryDate: '2026-07-14', status: 'completed', reflection: '第一篇。' },
+          { entryDate: '2026-07-14', status: 'missed', reflection: '第二篇。' },
+        ],
+      }),
+    })
+    expect(duplicate.response.status).toBe(400)
+    expect(duplicate.body.data.code).toBe('DUPLICATE_DATE')
+
+    const future = await request(`/api/goals/${goal.id}/essays/import`, {
+      method: 'POST',
+      body: JSON.stringify({
+        entries: [{ entryDate: tomorrow, status: 'completed', reflection: '未来。' }],
+      }),
+    })
+    expect(future.response.status).toBe(400)
+    expect(future.body.data.code).toBe('FUTURE_DATE')
+
+    const invalidDate = await request(`/api/goals/${goal.id}/essays/import`, {
+      method: 'POST',
+      body: JSON.stringify({
+        entries: [{ entryDate: '2026-02-30', status: 'completed', reflection: '无效日期。' }],
+      }),
+    })
+    expect(invalidDate.response.status).toBe(400)
+    expect(invalidDate.body.data.code).toBe('INVALID_DATE')
   })
 })
