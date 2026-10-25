@@ -5,7 +5,7 @@ import Database from 'better-sqlite3'
 import { addDays } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 import { fetch, setup } from '@nuxt/test-utils/e2e'
-import type { DailyEntry, Goal, GoalSummary } from '../../shared/types'
+import type { DailyEntryWithLinks, EssayEntry, Goal, GoalSummary } from '../../shared/types'
 import { todayDateOnly } from '../../shared/utils/date'
 
 const tempDir = await mkdtemp(join(tmpdir(), 'anti-habit-api-'))
@@ -38,10 +38,13 @@ async function request(path: string, options: RequestInit = {}) {
   }
 }
 
-async function createGoal(title: string): Promise<Goal> {
+async function createGoal(title: string, essayTitle?: string | null): Promise<Goal> {
   const { response, body } = await request('/api/goals', {
     method: 'POST',
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({
+      title,
+      ...(essayTitle !== undefined ? { essayTitle } : {}),
+    }),
   })
   expect(response.status).toBe(201)
   return body.goal as Goal
@@ -50,20 +53,30 @@ async function createGoal(title: string): Promise<Goal> {
 async function putEntry(
   goalId: string,
   date: string,
-  payload: { status: 'completed' | 'missed'; reflection?: string | null },
-): Promise<DailyEntry> {
+  payload: {
+    status: 'completed' | 'missed'
+    reflection?: string | null
+    linkedEntryIds?: string[]
+  },
+): Promise<DailyEntryWithLinks> {
   const { response, body } = await request(`/api/goals/${goalId}/entries/${date}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   })
   expect(response.status).toBe(200)
-  return body.entry as DailyEntry
+  return body.entry as DailyEntryWithLinks
 }
 
-async function getEntries(goalId: string, from: string, to: string): Promise<DailyEntry[]> {
+async function getEntries(goalId: string, from: string, to: string): Promise<DailyEntryWithLinks[]> {
   const { response, body } = await request(`/api/goals/${goalId}/entries?from=${from}&to=${to}`)
   expect(response.status).toBe(200)
-  return body.entries as DailyEntry[]
+  return body.entries as DailyEntryWithLinks[]
+}
+
+async function getEssays(goalId: string): Promise<EssayEntry[]> {
+  const { response, body } = await request(`/api/goals/${goalId}/essays`)
+  expect(response.status).toBe(200)
+  return body.entries as EssayEntry[]
 }
 
 describe('goals API', () => {
@@ -259,5 +272,250 @@ describe('goals API', () => {
     const missing = await request('/api/goals/00000000-0000-4000-8000-000000000000')
     expect(missing.response.status).toBe(404)
     expect(missing.body.data.code).toBe('GOAL_NOT_FOUND')
+  })
+
+  it('creates and updates an optional essay title', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'), '  论散步  ')
+    expect(goal.essayTitle).toBe('论散步')
+
+    const renamedTitle = uniqueTitle('Walk 20 Minutes')
+    const renamed = await request(`/api/goals/${goal.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: renamedTitle }),
+    })
+    expect(renamed.response.status).toBe(200)
+    expect(renamed.body.goal.essayTitle).toBe('论散步')
+
+    const cleared = await request(`/api/goals/${goal.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: renamedTitle, essayTitle: '   ' }),
+    })
+    expect(cleared.response.status).toBe(200)
+    expect(cleared.body.goal.essayTitle).toBeNull()
+
+    const overlong = await request(`/api/goals/${goal.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: renamedTitle, essayTitle: '论'.repeat(121) }),
+    })
+    expect(overlong.response.status).toBe(400)
+    expect(overlong.body.data.message).toContain('Essay 题目')
+  })
+
+  it('links a later entry to an earlier one and returns both directions', async () => {
+    const goal = await createGoal(uniqueTitle('Read Before Bed'))
+    const early = await putEntry(goal.id, '2026-07-14', {
+      status: 'missed',
+      reflection: '欲望经常从无聊开始。',
+    })
+    const late = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '我以前把问题理解成了意志力。',
+      linkedEntryIds: [early.id],
+    })
+    expect(late.linkedEntryIds).toEqual([early.id])
+
+    const deduped = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '我以前把问题理解成了意志力。',
+      linkedEntryIds: [early.id, early.id],
+    })
+    expect(deduped.linkedEntryIds).toEqual([early.id])
+
+    await putEntry(goal.id, '2026-08-12', {
+      status: 'completed',
+      reflection: null,
+    })
+
+    const essays = await getEssays(goal.id)
+    expect(essays.map(item => item.entry.id)).toEqual([late.id, early.id])
+    expect(essays[0]?.outgoing[0]).toMatchObject({
+      entryId: early.id,
+      entryDate: '2026-07-14',
+    })
+    expect(essays[1]?.incoming[0]).toMatchObject({
+      entryId: late.id,
+      entryDate: '2026-08-11',
+    })
+
+    await putEntry(goal.id, '2026-07-14', {
+      status: 'missed',
+      reflection: null,
+    })
+    const hidden = await getEssays(goal.id)
+    expect(hidden.map(item => item.entry.id)).toEqual([late.id])
+    expect(hidden[0]?.outgoing).toEqual([])
+
+    await putEntry(goal.id, '2026-07-14', {
+      status: 'missed',
+      reflection: '欲望经常从无聊开始。',
+    })
+    const restored = await getEssays(goal.id)
+    expect(restored[1]?.incoming[0]?.entryId).toBe(late.id)
+
+    const cleared = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '我以前把问题理解成了意志力。',
+      linkedEntryIds: [],
+    })
+    expect(cleared.linkedEntryIds).toEqual([])
+    expect((await getEssays(goal.id))[0]?.outgoing).toEqual([])
+  })
+
+  it('rejects invalid links and leaves the entry unchanged', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+    const otherGoal = await createGoal(uniqueTitle('No Phone After 11 PM'))
+
+    const early = await putEntry(goal.id, '2026-07-14', {
+      status: 'missed',
+      reflection: '较早的一天。',
+    })
+    const otherEntry = await putEntry(otherGoal.id, '2026-07-14', {
+      status: 'completed',
+      reflection: '另一个目标的一天。',
+    })
+    const laterEntry = await putEntry(goal.id, '2026-08-20', {
+      status: 'completed',
+      reflection: '更晚的一天。',
+    })
+    const deletedTarget = await putEntry(goal.id, '2026-07-15', {
+      status: 'completed',
+      reflection: '马上会被删除的一天。',
+    })
+
+    const original = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '原稿。',
+    })
+
+    await request(`/api/goals/${goal.id}/entries/2026-07-15`, { method: 'DELETE' })
+
+    const invalidCases = [
+      { linkedEntryIds: [original.id], code: 'INVALID_LINK' },
+      { linkedEntryIds: [otherEntry.id], code: 'INVALID_LINK' },
+      { linkedEntryIds: [laterEntry.id], code: 'INVALID_LINK' },
+      { linkedEntryIds: [deletedTarget.id], code: 'INVALID_LINK' },
+      { linkedEntryIds: ['00000000-0000-4000-8000-000000000000'], code: 'INVALID_LINK' },
+      { linkedEntryIds: [early.id], code: 'INVALID_LINK', date: '2026-07-14' },
+    ]
+
+    for (const invalid of invalidCases) {
+      const { response, body } = await request(
+        `/api/goals/${goal.id}/entries/${invalid.date ?? '2026-08-11'}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            status: 'missed',
+            reflection: '不应该被保存。',
+            linkedEntryIds: invalid.linkedEntryIds,
+          }),
+        },
+      )
+      expect(response.status).toBe(400)
+      expect(body.data.code).toBe(invalid.code)
+    }
+
+    const unchanged = await getEntries(goal.id, '2026-08-11', '2026-08-11')
+    expect(unchanged[0]).toMatchObject({
+      status: 'completed',
+      reflection: '原稿。',
+      linkedEntryIds: [],
+    })
+    expect((await getEssays(goal.id)).find(item => item.entry.id === original.id)?.outgoing).toEqual([])
+  })
+
+  it('soft deletes an entry and restores its id and links on save', async () => {
+    const goal = await createGoal(uniqueTitle('Read Before Bed'))
+    const early = await putEntry(goal.id, '2026-07-14', {
+      status: 'missed',
+      reflection: '较早的一天。',
+    })
+    const late = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '较晚的一天。',
+      linkedEntryIds: [early.id],
+    })
+
+    const deleted = await request(`/api/goals/${goal.id}/entries/2026-08-11`, {
+      method: 'DELETE',
+    })
+    expect(deleted.response.status).toBe(200)
+    expect(await getEntries(goal.id, '2026-08-11', '2026-08-11')).toHaveLength(0)
+
+    const afterDelete = await getEssays(goal.id)
+    expect(afterDelete).toHaveLength(1)
+    expect(afterDelete[0]?.entry.id).toBe(early.id)
+    expect(afterDelete[0]?.incoming).toEqual([])
+
+    const restored = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '较晚的一天。',
+    })
+    expect(restored.id).toBe(late.id)
+    expect(restored.linkedEntryIds).toEqual([early.id])
+
+    const afterRestore = await getEssays(goal.id)
+    expect(afterRestore[0]?.entry.id).toBe(late.id)
+    expect(afterRestore[1]?.incoming[0]?.entryId).toBe(late.id)
+
+    const cleared = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '较晚的一天。',
+      linkedEntryIds: [],
+    })
+    expect(cleared.linkedEntryIds).toEqual([])
+    expect(afterRestore[1]?.entry.id).toBe(early.id)
+    expect((await getEssays(goal.id))[1]?.incoming).toEqual([])
+  })
+
+  it('keeps existing links when the referenced day is soft deleted', async () => {
+    const goal = await createGoal(uniqueTitle('Read Before Bed'))
+    const early = await putEntry(goal.id, '2026-07-14', {
+      status: 'missed',
+      reflection: '较早的一天。',
+    })
+    const late = await putEntry(goal.id, '2026-08-11', {
+      status: 'completed',
+      reflection: '较晚的一天。',
+      linkedEntryIds: [early.id],
+    })
+    const extra = await putEntry(goal.id, '2026-07-15', {
+      status: 'completed',
+      reflection: '另一个较早的一天。',
+    })
+
+    await request(`/api/goals/${goal.id}/entries/2026-07-14`, { method: 'DELETE' })
+    await request(`/api/goals/${goal.id}/entries/2026-07-15`, { method: 'DELETE' })
+
+    const edited = await putEntry(goal.id, '2026-08-11', {
+      status: 'missed',
+      reflection: '较晚的一天，改过状态。',
+      linkedEntryIds: [early.id],
+    })
+    expect(edited.linkedEntryIds).toEqual([early.id])
+
+    const hidden = await getEssays(goal.id)
+    expect(hidden.map(item => item.entry.id)).toEqual([late.id])
+    expect(hidden[0]?.outgoing).toEqual([])
+
+    const rejected = await request(`/api/goals/${goal.id}/entries/2026-08-11`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        status: 'missed',
+        reflection: '较晚的一天，改过状态。',
+        linkedEntryIds: [early.id, extra.id],
+      }),
+    })
+    expect(rejected.response.status).toBe(400)
+    expect(rejected.body.data.code).toBe('INVALID_LINK')
+
+    const restored = await putEntry(goal.id, '2026-07-14', {
+      status: 'missed',
+      reflection: '较早的一天。',
+    })
+    expect(restored.id).toBe(early.id)
+
+    const afterRestore = await getEssays(goal.id)
+    expect(afterRestore.map(item => item.entry.id)).toEqual([late.id, early.id])
+    expect(afterRestore[1]?.incoming[0]?.entryId).toBe(late.id)
   })
 })

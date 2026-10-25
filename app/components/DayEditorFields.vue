@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import type { EntryStatus } from '#shared/types'
+import type { EntryStatus, EssayEntry } from '#shared/types'
 import { REFLECTION_MAX_LENGTH } from '#shared/schemas'
 
 const props = defineProps<{
   idPrefix: string
   error: string
   busy: boolean
+  candidates: EssayEntry[]
+  candidatesPending: boolean
+  candidatesError: string
 }>()
 
 const status = defineModel<EntryStatus | null>('status', { required: true })
 const reflection = defineModel<string>('reflection', { required: true })
+const linkedEntryIds = defineModel<string[]>('linkedEntryIds', { required: true })
 
 const reflectionId = computed(() => `reflection-${props.idPrefix}`)
 const reflectionHelpId = computed(() => `reflection-help-${props.idPrefix}`)
@@ -63,7 +67,7 @@ function statusClasses(value: EntryStatus): string {
     <div>
       <div class="flex items-baseline justify-between gap-3">
         <label :for="reflectionId" class="text-sm font-medium text-ink">
-          当时发生了什么
+          这一天想到什么？
           <span class="font-normal text-ink-faint">选填</span>
         </label>
         <span class="text-xs tabular-nums text-ink-faint">
@@ -71,7 +75,7 @@ function statusClasses(value: EntryStatus): string {
         </span>
       </div>
       <p :id="reflectionHelpId" class="mt-1 text-xs leading-5 text-ink-soft">
-        写当天发生了什么，或者后来想到的事。
+        可以记下当时发生的事，也可以继续以前的想法。
       </p>
       <textarea
         :id="reflectionId"
@@ -84,6 +88,14 @@ function statusClasses(value: EntryStatus): string {
         placeholder="可以留空。"
       />
     </div>
+
+    <EntryLinkPicker
+      v-model:selected="linkedEntryIds"
+      :candidates="candidates"
+      :pending="candidatesPending"
+      :error="candidatesError"
+      :busy="busy"
+    />
 
     <p v-if="error" class="text-sm text-miss" role="alert">
       {{ error }}

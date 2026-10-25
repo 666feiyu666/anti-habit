@@ -1,29 +1,88 @@
-import type { DailyEntry, EntryStatus } from '#shared/types'
+import type { DailyEntryWithLinks, EntryStatus, EssayEntry } from '#shared/types'
 
 interface DayEditorOptions {
   goalId: () => string
   date: () => string
-  entry: () => DailyEntry | null
+  entry: () => DailyEntryWithLinks | null
   changed: () => void
+}
+
+interface EditorSnapshot {
+  status: EntryStatus | null
+  reflection: string
+  linkedEntryIds: string[]
+}
+
+function snapshotOf(entry: DailyEntryWithLinks | null): EditorSnapshot {
+  return {
+    status: entry?.status ?? null,
+    reflection: entry?.reflection ?? '',
+    linkedEntryIds: [...(entry?.linkedEntryIds ?? [])],
+  }
+}
+
+function sameIds(left: string[], right: string[]) {
+  if (left.length !== right.length) return false
+  const ids = new Set(left)
+  return right.every(id => ids.has(id))
 }
 
 export function useDayEditor(options: DayEditorOptions) {
   const toast = useToast()
   const status = ref<EntryStatus | null>(null)
   const reflection = ref('')
+  const linkedEntryIds = ref<string[]>([])
+  const snapshot = ref<EditorSnapshot | null>(null)
   const error = ref('')
   const saving = ref(false)
   const clearing = ref(false)
+  const candidates = ref<EssayEntry[]>([])
+  const candidatesPending = ref(false)
+  const candidatesError = ref('')
 
   const busy = computed(() => saving.value || clearing.value)
+  const dirty = computed(() => {
+    if (!snapshot.value) return false
+    return status.value !== snapshot.value.status
+      || reflection.value !== snapshot.value.reflection
+      || !sameIds(linkedEntryIds.value, snapshot.value.linkedEntryIds)
+  })
 
-  function reset() {
-    status.value = options.entry()?.status ?? null
-    reflection.value = options.entry()?.reflection ?? ''
-    error.value = ''
+  function load(entry: DailyEntryWithLinks | null) {
+    const next = snapshotOf(entry)
+    status.value = next.status
+    reflection.value = next.reflection
+    linkedEntryIds.value = [...next.linkedEntryIds]
+    snapshot.value = next
   }
 
-  watch([options.date, options.entry], reset, { immediate: true })
+  function reset() {
+    load(options.entry())
+  }
+
+  watch(options.entry, (entry) => {
+    if (dirty.value) return
+    load(entry)
+  }, { immediate: true })
+
+  async function loadCandidates() {
+    candidatesPending.value = true
+    candidatesError.value = ''
+
+    try {
+      const data = await $fetch<{ entries: EssayEntry[] }>(
+        `/api/goals/${options.goalId()}/essays`,
+      )
+      candidates.value = data.entries.filter(
+        item => item.entry.entryDate < options.date(),
+      )
+    } catch (caught) {
+      candidates.value = []
+      candidatesError.value = getApiErrorMessage(caught)
+    } finally {
+      candidatesPending.value = false
+    }
+  }
 
   async function save(): Promise<boolean> {
     if (!status.value) {
@@ -35,13 +94,18 @@ export function useDayEditor(options: DayEditorOptions) {
     error.value = ''
 
     try {
-      await $fetch(`/api/goals/${options.goalId()}/entries/${options.date()}`, {
-        method: 'PUT',
-        body: {
-          status: status.value,
-          reflection: reflection.value,
+      const result = await $fetch<{ entry: DailyEntryWithLinks }>(
+        `/api/goals/${options.goalId()}/entries/${options.date()}`,
+        {
+          method: 'PUT',
+          body: {
+            status: status.value,
+            reflection: reflection.value,
+            linkedEntryIds: linkedEntryIds.value,
+          },
         },
-      })
+      )
+      load(result.entry)
       toast.add({ title: '已保存', color: 'neutral' })
       options.changed()
       return true
@@ -53,13 +117,14 @@ export function useDayEditor(options: DayEditorOptions) {
     }
   }
 
-  async function restore(entry: DailyEntry) {
+  async function restore(entry: DailyEntryWithLinks) {
     try {
       await $fetch(`/api/goals/${options.goalId()}/entries/${entry.entryDate}`, {
         method: 'PUT',
         body: {
           status: entry.status,
           reflection: entry.reflection,
+          linkedEntryIds: entry.linkedEntryIds,
         },
       })
       options.changed()
@@ -83,6 +148,7 @@ export function useDayEditor(options: DayEditorOptions) {
       await $fetch(`/api/goals/${options.goalId()}/entries/${options.date()}`, {
         method: 'DELETE',
       })
+      load(null)
       toast.add({
         title: '已清除这一天的记录',
         color: 'neutral',
@@ -104,15 +170,28 @@ export function useDayEditor(options: DayEditorOptions) {
     }
   }
 
+  function requestClose(): boolean {
+    if (busy.value) return false
+    if (!dirty.value) return true
+    return window.confirm('这一天还有未保存的内容，确定关闭吗？')
+  }
+
   return {
     status,
     reflection,
+    linkedEntryIds,
+    candidates,
+    candidatesPending,
+    candidatesError,
     error,
     saving,
     clearing,
     busy,
+    dirty,
     reset,
+    loadCandidates,
     save,
     clear,
+    requestClose,
   }
 }

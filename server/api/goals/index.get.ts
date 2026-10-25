@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
     .leftJoin(dailyEntries, and(
       eq(dailyEntries.goalId, goals.id),
       eq(dailyEntries.entryDate, date),
+      isNull(dailyEntries.deletedAt),
     ))
     .where(isNull(goals.deletedAt))
     .orderBy(asc(goals.createdAt), asc(goals.id))

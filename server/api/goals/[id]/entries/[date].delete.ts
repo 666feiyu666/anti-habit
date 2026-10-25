@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { dailyEntries } from '../../../../database/schema'
 import { getDatabase } from '../../../../utils/db'
 import { requireActiveGoal } from '../../../../utils/goals'
@@ -10,11 +10,14 @@ export default defineEventHandler(async (event) => {
   const db = getDatabase()
   await requireActiveGoal(db, id)
 
+  const now = Math.floor(Date.now() / 1000)
   await db
-    .delete(dailyEntries)
+    .update(dailyEntries)
+    .set({ deletedAt: now, updatedAt: now })
     .where(and(
       eq(dailyEntries.goalId, id!),
       eq(dailyEntries.entryDate, entryDate),
+      isNull(dailyEntries.deletedAt),
     ))
 
   return { deleted: true }

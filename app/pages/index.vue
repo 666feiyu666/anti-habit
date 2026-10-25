@@ -1,40 +1,100 @@
 <script setup lang="ts">
-import type { GoalSummary } from '#shared/types'
-import { todayDateOnly } from '#shared/utils/date'
-import { formatDayNumber, formatMonthName, formatWeekday } from '~/utils/date-display'
+import { addMonths, endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns'
+import type { DailyEntryWithLinks, EssayEntry, Goal, GoalSummary } from '#shared/types'
+import { getDayAppearance } from '#shared/utils/day-appearance'
+import { isValidDateOnly, todayDateOnly } from '#shared/utils/date'
+import { formatDateKey, formatDayLabel, formatMonthLabel, formatWeekday } from '~/utils/date-display'
+import { dayStatusDot, dayStatusLabel } from '~/utils/day-display'
 
 useHead({ title: 'Anti-Habit' })
 
+const route = useRoute()
+const router = useRouter()
+
 const today = ref(todayDateOnly())
-onMounted(() => {
-  today.value = todayDateOnly()
-})
+const todayLabel = computed(() => `${formatDayLabel(today.value)}，${formatWeekday(today.value)}`)
+
+function queryValue(key: string): string | null {
+  const value = route.query[key]
+  return typeof value === 'string' ? value : null
+}
+
+function resolveDate(value: string | null): string {
+  if (value && isValidDateOnly(value) && value <= today.value) return value
+  return today.value
+}
+
+const queryDate = computed(() => queryValue('date'))
+const selectedDate = ref(resolveDate(queryDate.value))
+const monthAnchor = ref(startOfMonth(parseISO(selectedDate.value)))
 
 const { data, pending, error, refresh } = await useFetch<{ goals: GoalSummary[] }>('/api/goals', {
-  key: 'goals-home',
+  key: 'goals-workbench',
   query: computed(() => ({ date: today.value })),
   default: () => ({ goals: [] }),
 })
 
 const goals = computed(() => data.value?.goals ?? [])
-const dayNumber = computed(() => formatDayNumber(today.value))
-const monthName = computed(() => formatMonthName(today.value))
-const weekday = computed(() => formatWeekday(today.value))
 
-const unrecordedToday = computed(() => goals.value.filter(goal => !goal.todayEntry).length)
-const todayLine = computed(() => {
-  if (!unrecordedToday.value) return '今天都记过了。'
-  return `今天还有 ${unrecordedToday.value} 个目标没有记录。`
+const requestedGoalId = computed(() => queryValue('goal'))
+const selectedGoalId = computed(() => {
+  const requested = requestedGoalId.value
+  if (requested && goals.value.some(goal => goal.id === requested)) return requested
+  return goals.value[0]?.id ?? null
 })
+const selectedGoal = computed(() => (
+  goals.value.find(goal => goal.id === selectedGoalId.value) ?? null
+))
+
+const monthKey = computed(() => format(monthAnchor.value, 'yyyy-MM'))
+const monthLabel = computed(() => formatMonthLabel(monthAnchor.value))
+const rangeFrom = computed(() => formatDateKey(startOfWeek(startOfMonth(monthAnchor.value), { weekStartsOn: 1 })))
+const rangeTo = computed(() => formatDateKey(endOfWeek(endOfMonth(monthAnchor.value), { weekStartsOn: 1 })))
+const entriesKey = computed(() => `workbench-entries:${selectedGoalId.value ?? 'none'}:${monthKey.value}`)
+
+const {
+  data: entriesData,
+  pending: entriesPending,
+  error: entriesError,
+  refresh: refreshEntries,
+} = await useAsyncData(
+  entriesKey,
+  async () => {
+    const goalId = selectedGoalId.value
+    if (!goalId) return { entries: [] as DailyEntryWithLinks[] }
+
+    return await $fetch<{ entries: DailyEntryWithLinks[] }>(`/api/goals/${goalId}/entries`, {
+      query: { from: rangeFrom.value, to: rangeTo.value },
+    })
+  },
+  {
+    watch: [selectedGoalId, monthKey],
+    default: () => ({ entries: [] as DailyEntryWithLinks[] }),
+  },
+)
+
+const entries = computed(() => entriesData.value?.entries ?? [])
+const selectedEntry = computed(() => (
+  entries.value.find(entry => entry.entryDate === selectedDate.value) ?? null
+))
+const currentAppearance = computed(() => getDayAppearance(selectedGoal.value?.todayEntry))
+const isCurrentMonth = computed(() => monthKey.value === format(parseISO(today.value), 'yyyy-MM'))
 
 const isCreateOpen = ref(false)
-const renameTarget = ref<GoalSummary | null>(null)
+const editTarget = ref<GoalSummary | null>(null)
 const deleteTarget = ref<GoalSummary | null>(null)
+const editorOpen = ref(false)
 
-const renameOpen = computed({
-  get: () => renameTarget.value !== null,
+const readerOpen = ref(false)
+const readerGoal = ref<GoalSummary | null>(null)
+const essayEntries = ref<EssayEntry[]>([])
+const essayPending = ref(false)
+const essayError = ref('')
+
+const editOpen = computed({
+  get: () => editTarget.value !== null,
   set: (open: boolean) => {
-    if (!open) renameTarget.value = null
+    if (!open) editTarget.value = null
   },
 })
 
@@ -45,129 +105,330 @@ const deleteOpen = computed({
   },
 })
 
-async function handleSaved() {
-  await refresh()
+function sameQuery(query: { goal?: string, date?: string }) {
+  const goal = typeof route.query.goal === 'string' ? route.query.goal : undefined
+  const date = typeof route.query.date === 'string' ? route.query.date : undefined
+  return (query.goal ?? undefined) === goal && (query.date ?? undefined) === date
 }
+
+async function syncQuery() {
+  if (!import.meta.client) return
+
+  const query: { goal?: string, date?: string } = selectedGoalId.value
+    ? { goal: selectedGoalId.value, date: selectedDate.value }
+    : {}
+
+  if (sameQuery(query)) return
+  await router.replace({ query })
+}
+
+async function selectGoal(goal: GoalSummary) {
+  if (goal.id === selectedGoalId.value) return
+  await router.replace({ query: { goal: goal.id, date: selectedDate.value } })
+}
+
+async function selectGoalById(goalId: string) {
+  await router.replace({ query: { goal: goalId, date: selectedDate.value } })
+}
+
+function openDay(date: string) {
+  if (date > today.value) return
+  selectedDate.value = date
+  monthAnchor.value = startOfMonth(parseISO(date))
+  void syncQuery()
+  editorOpen.value = true
+}
+
+function openReaderDate(date: string) {
+  readerOpen.value = false
+  openDay(date)
+}
+
+async function openEssay(goal: GoalSummary) {
+  readerGoal.value = goal
+  readerOpen.value = true
+  essayEntries.value = []
+  essayPending.value = true
+  essayError.value = ''
+
+  await selectGoal(goal)
+
+  try {
+    const result = await $fetch<{ entries: EssayEntry[] }>(`/api/goals/${goal.id}/essays`)
+    essayEntries.value = result.entries
+  } catch (caught) {
+    essayError.value = getApiErrorMessage(caught)
+  } finally {
+    essayPending.value = false
+  }
+}
+
+function previousMonth() {
+  monthAnchor.value = addMonths(monthAnchor.value, -1)
+}
+
+function nextMonth() {
+  monthAnchor.value = addMonths(monthAnchor.value, 1)
+}
+
+function goToCurrentMonth() {
+  monthAnchor.value = startOfMonth(parseISO(today.value))
+}
+
+async function handleEntryChanged() {
+  await Promise.all([refreshEntries(), refresh()])
+}
+
+async function handleGoalSaved(goal: Goal) {
+  const wasNew = !goals.value.some(item => item.id === goal.id)
+  await refresh()
+
+  if (wasNew) {
+    await selectGoalById(goal.id)
+    return
+  }
+
+  await syncQuery()
+}
+
+async function handleGoalDeleted() {
+  await refresh()
+  await syncQuery()
+}
+
+watch(queryDate, (value) => {
+  const next = resolveDate(value)
+  if (next !== selectedDate.value) {
+    selectedDate.value = next
+    monthAnchor.value = startOfMonth(parseISO(next))
+  }
+  void syncQuery()
+})
+
+watch([selectedGoalId, selectedDate], () => {
+  void syncQuery()
+})
+
+onMounted(() => {
+  const actualToday = todayDateOnly()
+  if (actualToday !== today.value) {
+    const wasToday = selectedDate.value === today.value
+    today.value = actualToday
+
+    if (wasToday || selectedDate.value > actualToday) {
+      selectedDate.value = actualToday
+      monthAnchor.value = startOfMonth(parseISO(actualToday))
+    }
+  }
+
+  void syncQuery()
+})
 </script>
 
 <template>
   <div class="min-h-dvh">
-    <main class="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-5 py-8 sm:px-6 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-16 lg:px-10 lg:py-16">
-      <aside class="lg:sticky lg:top-16 lg:self-start">
-        <div class="flex flex-wrap items-start justify-between gap-4 lg:block lg:gap-0">
-          <div>
-            <p class="font-serif text-2xl tracking-tight text-ink">
-              Anti-Habit
-            </p>
-            <div class="mt-6 flex items-baseline gap-3 lg:mt-10 lg:block">
-              <p class="font-serif text-6xl leading-[0.9] tracking-tight text-ink lg:text-7xl">
-                {{ dayNumber }}
-              </p>
-              <p class="text-sm text-ink-soft lg:mt-3">
-                {{ monthName }}，{{ weekday }}
+    <main class="mx-auto w-full max-w-6xl px-5 py-8 sm:px-6 lg:px-10 lg:py-12">
+      <header class="flex flex-wrap items-baseline justify-between gap-3 border-b border-rule pb-5">
+        <div>
+          <p class="font-serif text-2xl tracking-tight text-ink">
+            Anti-Habit
+          </p>
+          <p class="mt-1 text-sm text-ink-soft">
+            {{ todayLabel }}
+          </p>
+        </div>
+        <p class="hidden max-w-xs text-pretty text-xs leading-5 text-ink-faint sm:block">
+          一次打卡，也可以是一篇随笔的开头。
+        </p>
+      </header>
+
+      <UAlert
+        v-if="error"
+        color="error"
+        variant="soft"
+        title="没能读到目标"
+        :description="getApiErrorMessage(error)"
+        class="mt-6"
+      />
+
+      <div
+        v-if="pending && !goals.length"
+        class="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12"
+        aria-busy="true"
+        aria-label="正在读取工作台"
+      >
+        <div class="h-96 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+        <div class="h-64 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+      </div>
+
+      <div
+        v-else-if="selectedGoal"
+        class="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12"
+      >
+        <section aria-labelledby="calendar-heading">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <h1 class="truncate font-serif text-3xl tracking-tight text-ink sm:text-4xl">
+                {{ selectedGoal.essayTitle || '随笔' }}
+              </h1>
+              <p class="mt-1 truncate text-sm text-ink-soft">
+                {{ selectedGoal.title }}
               </p>
             </div>
+
+            <span
+              class="flex shrink-0 items-center gap-2 pt-2 text-xs"
+              :class="currentAppearance === 'unrecorded' ? 'text-ink-faint' : 'text-ink-soft'"
+            >
+              <span
+                class="size-2 rounded-[2px]"
+                :class="dayStatusDot[currentAppearance]"
+                aria-hidden="true"
+              />
+              {{ dayStatusLabel[currentAppearance] }}
+            </span>
           </div>
 
-          <UButton
-            class="shrink-0 lg:hidden"
-            icon="i-lucide-plus"
-            label="新增目标"
-            size="sm"
-            @click="isCreateOpen = true"
-          />
-        </div>
+          <div
+            class="mt-6 border border-rule bg-sheet p-4 sm:p-6"
+            aria-labelledby="calendar-heading"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-1">
+                <UButton
+                  icon="i-lucide-chevron-left"
+                  color="neutral"
+                  variant="ghost"
+                  aria-label="上一个月"
+                  @click="previousMonth"
+                />
+                <h2 id="calendar-heading" class="min-w-32 text-center font-serif text-lg text-ink">
+                  {{ monthLabel }}
+                </h2>
+                <UButton
+                  icon="i-lucide-chevron-right"
+                  color="neutral"
+                  variant="ghost"
+                  aria-label="下一个月"
+                  @click="nextMonth"
+                />
+              </div>
 
-        <p class="mt-5 max-w-60 text-sm leading-6 text-ink-soft">
-          点一天，记下完成或未完成。没完成的日子，可以补一段记录。
-        </p>
-        <p v-if="goals.length" class="mt-2 text-sm leading-6 text-ink">
-          {{ todayLine }}
-        </p>
+              <div class="flex items-center gap-2">
+                <span v-if="entriesPending" class="text-xs text-ink-faint">读取中…</span>
+                <UButton
+                  v-if="!isCurrentMonth"
+                  label="回到本月"
+                  icon="i-lucide-calendar"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  @click="goToCurrentMonth"
+                />
+              </div>
+            </div>
 
+            <UAlert
+              v-if="entriesError"
+              color="error"
+              variant="soft"
+              title="没能读到这个月的记录"
+              :description="getApiErrorMessage(entriesError)"
+              class="mt-4"
+            />
+
+            <CalendarGrid
+              :month="monthAnchor"
+              :entries="entries"
+              :today="today"
+              @select="openDay"
+            />
+          </div>
+
+          <p class="mt-4 max-w-xl text-pretty text-xs leading-5 text-ink-faint">
+            点一天，写下完成或未完成，也可以继续以前的想法。
+          </p>
+        </section>
+
+        <aside aria-labelledby="shelf-heading">
+          <div class="flex items-center justify-between gap-3 border-b border-rule pb-3">
+            <h2 id="shelf-heading" class="font-serif text-2xl text-ink">
+              书架
+            </h2>
+            <UButton
+              icon="i-lucide-plus"
+              label="新增目标"
+              size="sm"
+              @click="isCreateOpen = true"
+            />
+          </div>
+
+          <p class="mt-2 text-xs leading-5 text-ink-faint">
+            {{ goals.length }} 本。选一本，左边的日历会跟着切换。
+          </p>
+
+          <ul class="mt-2 divide-y divide-rule">
+            <li v-for="goal in goals" :key="goal.id">
+              <EssayBook
+                :goal="goal"
+                :selected="goal.id === selectedGoalId"
+                @select="selectGoal(goal)"
+                @open-essay="openEssay(goal)"
+                @edit="editTarget = goal"
+                @delete="deleteTarget = goal"
+              />
+            </li>
+          </ul>
+        </aside>
+      </div>
+
+      <section v-else-if="!error" class="mt-12 max-w-md">
+        <h1 class="font-serif text-3xl text-ink">
+          还没有目标
+        </h1>
+        <p class="mt-3 text-sm leading-6 text-ink-soft">
+          写下一个想持续观察的目标。比如，晚上十一点后不看手机。
+        </p>
         <UButton
-          class="mt-6 hidden w-full justify-center lg:flex"
+          class="mt-6"
           icon="i-lucide-plus"
           label="新增目标"
-          size="lg"
           @click="isCreateOpen = true"
         />
-
-        <p class="mt-10 hidden text-pretty text-xs leading-5 text-ink-faint lg:block">
-          没有记录的日子，不算失败。
-        </p>
-      </aside>
-
-      <section aria-labelledby="goals-heading">
-        <div class="flex items-baseline justify-between border-b border-rule pb-3">
-          <h1 id="goals-heading" class="font-serif text-2xl text-ink">
-            目标
-          </h1>
-          <span v-if="goals.length" class="text-xs text-ink-faint">今天</span>
-        </div>
-
-        <UAlert
-          v-if="error"
-          color="error"
-          variant="soft"
-          title="没能读到目标"
-          :description="getApiErrorMessage(error)"
-          class="mt-6"
-        />
-
-        <div
-          v-if="pending && !goals.length"
-          class="divide-y divide-rule"
-          aria-busy="true"
-          aria-label="正在读取目标"
-        >
-          <div v-for="index in 3" :key="index" class="py-6">
-            <div class="h-6 w-48 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
-          </div>
-        </div>
-
-        <ul v-else-if="goals.length" class="divide-y divide-rule" aria-label="目标列表">
-          <li v-for="goal in goals" :key="goal.id">
-            <GoalRow
-              :goal="goal"
-              @rename="renameTarget = goal"
-              @delete="deleteTarget = goal"
-            />
-          </li>
-        </ul>
-
-        <div v-else-if="!error" class="py-16 sm:py-24">
-          <p class="font-serif text-2xl text-ink">
-            还没有目标
-          </p>
-          <p class="mt-3 max-w-md text-sm leading-6 text-ink-soft">
-            写下一个想持续观察的目标。比如，晚上十一点后不看手机。
-          </p>
-          <UButton
-            class="mt-6"
-            icon="i-lucide-plus"
-            label="新增目标"
-            @click="isCreateOpen = true"
-          />
-        </div>
       </section>
     </main>
 
     <GoalFormModal
       v-model:open="isCreateOpen"
       mode="create"
-      @saved="handleSaved"
+      @saved="handleGoalSaved"
     />
     <GoalFormModal
-      v-model:open="renameOpen"
-      mode="rename"
-      :goal="renameTarget"
-      @saved="handleSaved"
+      v-model:open="editOpen"
+      mode="edit"
+      :goal="editTarget"
+      @saved="handleGoalSaved"
     />
     <GoalDeleteModal
       v-model:open="deleteOpen"
       :goal="deleteTarget"
-      @deleted="handleSaved"
+      @deleted="handleGoalDeleted"
+    />
+    <DayEditorModal
+      v-if="selectedGoal"
+      v-model:open="editorOpen"
+      :goal-id="selectedGoal.id"
+      :date="selectedDate"
+      :entry="selectedEntry"
+      @changed="handleEntryChanged"
+    />
+    <EssayReader
+      v-model:open="readerOpen"
+      :goal="readerGoal"
+      :entries="essayEntries"
+      :pending="essayPending"
+      :error="essayError"
+      @select-date="openReaderDate"
     />
   </div>
 </template>

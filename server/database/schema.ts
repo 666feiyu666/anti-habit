@@ -1,9 +1,10 @@
 import { sql } from 'drizzle-orm'
-import { check, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 export const goals = sqliteTable('goals', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
+  essayTitle: text('essay_title'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
   deletedAt: integer('deleted_at'),
@@ -21,6 +22,7 @@ export const dailyEntries = sqliteTable(
     reflection: text('reflection'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
+    deletedAt: integer('deleted_at'),
   },
   table => [
     uniqueIndex('daily_entries_goal_id_entry_date_unique').on(table.goalId, table.entryDate),
@@ -28,7 +30,28 @@ export const dailyEntries = sqliteTable(
   ],
 )
 
+export const entryLinks = sqliteTable(
+  'entry_links',
+  {
+    sourceEntryId: text('source_entry_id')
+      .notNull()
+      .references(() => dailyEntries.id),
+    targetEntryId: text('target_entry_id')
+      .notNull()
+      .references(() => dailyEntries.id),
+    createdAt: integer('created_at').notNull(),
+  },
+  table => [
+    primaryKey({ columns: [table.sourceEntryId, table.targetEntryId] }),
+    index('entry_links_source_idx').on(table.sourceEntryId),
+    index('entry_links_target_idx').on(table.targetEntryId),
+    check('entry_links_not_self_check', sql`${table.sourceEntryId} <> ${table.targetEntryId}`),
+  ],
+)
+
 export type GoalRow = typeof goals.$inferSelect
 export type NewGoalRow = typeof goals.$inferInsert
 export type DailyEntryRow = typeof dailyEntries.$inferSelect
 export type NewDailyEntryRow = typeof dailyEntries.$inferInsert
+export type EntryLinkRow = typeof entryLinks.$inferSelect
+export type NewEntryLinkRow = typeof entryLinks.$inferInsert

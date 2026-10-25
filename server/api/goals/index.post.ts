@@ -6,7 +6,7 @@ import { assertTitleAvailable } from '../../utils/goals'
 import { parseBody } from '../../utils/http'
 
 export default defineEventHandler(async (event) => {
-  const { title } = await parseBody(event, createGoalSchema)
+  const { title, essayTitle } = await parseBody(event, createGoalSchema)
   const db = getDatabase()
 
   await assertTitleAvailable(db, title)
@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
     .values({
       id: randomUUID(),
       title,
+      essayTitle: essayTitle ?? null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,

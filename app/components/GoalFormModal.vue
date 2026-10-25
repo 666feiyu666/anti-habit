@@ -1,31 +1,35 @@
 <script setup lang="ts">
-import { GOAL_TITLE_MAX_LENGTH } from '#shared/schemas'
+import type { Goal } from '#shared/types'
+import { ESSAY_TITLE_MAX_LENGTH, GOAL_TITLE_MAX_LENGTH } from '#shared/schemas'
 
 const props = defineProps<{
   open: boolean
-  mode: 'create' | 'rename'
-  goal?: { id: string; title: string } | null
+  mode: 'create' | 'edit'
+  goal?: { id: string, title: string, essayTitle: string | null } | null
 }>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  saved: []
+  saved: [goal: Goal]
 }>()
 
 const toast = useToast()
 const title = ref('')
+const essayTitle = ref('')
 const error = ref('')
 const saving = ref(false)
 
 watch(() => props.open, (open) => {
   if (!open) return
-  title.value = props.mode === 'rename' ? props.goal?.title ?? '' : ''
+  title.value = props.mode === 'edit' ? props.goal?.title ?? '' : ''
+  essayTitle.value = props.mode === 'edit' ? props.goal?.essayTitle ?? '' : ''
   error.value = ''
 })
 
 const normalizedTitle = computed(() => title.value.trim())
-const heading = computed(() => props.mode === 'create' ? '新增目标' : '重命名目标')
-const submitLabel = computed(() => props.mode === 'create' ? '创建目标' : '保存名称')
+const normalizedEssayTitle = computed(() => essayTitle.value.trim())
+const heading = computed(() => props.mode === 'create' ? '新增目标' : '编辑目标')
+const submitLabel = computed(() => props.mode === 'create' ? '创建目标' : '保存修改')
 
 async function submit() {
   if (saving.value) return
@@ -38,27 +42,32 @@ async function submit() {
     error.value = `目标名称不能超过 ${GOAL_TITLE_MAX_LENGTH} 个字符`
     return
   }
+  if (normalizedEssayTitle.value.length > ESSAY_TITLE_MAX_LENGTH) {
+    error.value = `Essay 题目不能超过 ${ESSAY_TITLE_MAX_LENGTH} 个字符`
+    return
+  }
 
   saving.value = true
   error.value = ''
 
   try {
-    if (props.mode === 'create') {
-      await $fetch('/api/goals', {
-        method: 'POST',
-        body: { title: normalizedTitle.value },
-      })
-    } else if (props.goal) {
-      await $fetch(`/api/goals/${props.goal.id}`, {
-        method: 'PATCH',
-        body: { title: normalizedTitle.value },
-      })
+    const body = {
+      title: normalizedTitle.value,
+      essayTitle: normalizedEssayTitle.value || null,
     }
 
+    const saved = props.mode === 'create'
+      ? await $fetch<{ goal: Goal }>('/api/goals', { method: 'POST', body })
+      : props.goal
+        ? await $fetch<{ goal: Goal }>(`/api/goals/${props.goal.id}`, { method: 'PATCH', body })
+        : null
+
+    if (!saved) return
+
     emit('update:open', false)
-    emit('saved')
+    emit('saved', saved.goal)
     toast.add({
-      title: props.mode === 'create' ? '已新增目标' : '已重命名',
+      title: props.mode === 'create' ? '已新增目标' : '已保存',
       color: 'neutral',
     })
   } catch (caught) {
@@ -79,26 +88,53 @@ async function submit() {
     @update:open="emit('update:open', $event)"
   >
     <template #body>
-      <form id="goal-form" novalidate @submit.prevent="submit">
-        <div class="flex items-center justify-between gap-3">
-          <label for="goal-title" class="text-sm font-medium text-ink">
-            目标名称
-          </label>
-          <span class="text-xs tabular-nums text-ink-faint">
-            {{ title.length }}/{{ GOAL_TITLE_MAX_LENGTH }}
-          </span>
+      <form id="goal-form" class="flex flex-col gap-5" novalidate @submit.prevent="submit">
+        <div>
+          <div class="flex items-center justify-between gap-3">
+            <label for="goal-title" class="text-sm font-medium text-ink">
+              目标名称
+            </label>
+            <span class="text-xs tabular-nums text-ink-faint">
+              {{ title.length }}/{{ GOAL_TITLE_MAX_LENGTH }}
+            </span>
+          </div>
+          <UInput
+            id="goal-title"
+            v-model="title"
+            class="mt-2 w-full"
+            :maxlength="GOAL_TITLE_MAX_LENGTH"
+            placeholder="例如：每天散步二十分钟"
+            autofocus
+            autocomplete="off"
+            :disabled="saving"
+          />
         </div>
-        <UInput
-          id="goal-title"
-          v-model="title"
-          class="mt-2 w-full"
-          :maxlength="GOAL_TITLE_MAX_LENGTH"
-          placeholder="例如：每天散步二十分钟"
-          autofocus
-          autocomplete="off"
-          :disabled="saving"
-        />
-        <p v-if="error" class="mt-2 text-sm text-miss" role="alert">
+
+        <div>
+          <div class="flex items-center justify-between gap-3">
+            <label for="essay-title" class="text-sm font-medium text-ink">
+              Essay 题目
+              <span class="font-normal text-ink-faint">选填</span>
+            </label>
+            <span class="text-xs tabular-nums text-ink-faint">
+              {{ essayTitle.length }}/{{ ESSAY_TITLE_MAX_LENGTH }}
+            </span>
+          </div>
+          <p class="mt-1 text-xs leading-5 text-ink-soft">
+            留空时，这本书就叫“随笔”。
+          </p>
+          <UInput
+            id="essay-title"
+            v-model="essayTitle"
+            class="mt-2 w-full"
+            :maxlength="ESSAY_TITLE_MAX_LENGTH"
+            placeholder="例如：论散步"
+            autocomplete="off"
+            :disabled="saving"
+          />
+        </div>
+
+        <p v-if="error" class="text-sm text-miss" role="alert">
           {{ error }}
         </p>
       </form>

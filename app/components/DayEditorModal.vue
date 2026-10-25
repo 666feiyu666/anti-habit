@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { DailyEntry } from '#shared/types'
+import type { DailyEntryWithLinks } from '#shared/types'
 import { formatFullDayLabel } from '~/utils/date-display'
 
 const props = defineProps<{
   open: boolean
   goalId: string
   date: string
-  entry: DailyEntry | null
+  entry: DailyEntryWithLinks | null
 }>()
 
 const emit = defineEmits<{
@@ -17,13 +17,20 @@ const emit = defineEmits<{
 const {
   status,
   reflection,
+  linkedEntryIds,
+  candidates,
+  candidatesPending,
+  candidatesError,
   error,
   saving,
   clearing,
   busy,
+  dirty,
   reset,
+  loadCandidates,
   save,
   clear,
+  requestClose,
 } = useDayEditor({
   goalId: () => props.goalId,
   date: () => props.date,
@@ -32,10 +39,17 @@ const {
 })
 
 watch(() => props.open, (open) => {
-  if (open) reset()
+  if (!open) return
+  reset()
+  void loadCandidates()
 })
 
 const dateLabel = computed(() => props.date ? formatFullDayLabel(props.date) : '')
+
+function handleOpenChange(value: boolean) {
+  if (value) return
+  if (requestClose()) emit('update:open', false)
+}
 
 async function handleSave() {
   if (await save()) emit('update:open', false)
@@ -55,13 +69,17 @@ async function handleClear() {
     :transition="false"
     scrollable
     :ui="{ content: 'bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
-    @update:open="emit('update:open', $event)"
+    @update:open="handleOpenChange"
   >
     <template #body>
       <DayEditorFields
         id-prefix="modal"
         v-model:status="status"
         v-model:reflection="reflection"
+        v-model:linked-entry-ids="linkedEntryIds"
+        :candidates="candidates"
+        :candidates-pending="candidatesPending"
+        :candidates-error="candidatesError"
         :error="error"
         :busy="busy"
       />
@@ -69,23 +87,26 @@ async function handleClear() {
 
     <template #footer>
       <div class="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <UButton
-          v-if="entry"
-          label="清除这一天"
-          icon="i-lucide-eraser"
-          color="error"
-          variant="ghost"
-          :loading="clearing"
-          :disabled="saving"
-          @click="handleClear"
-        />
+        <div class="flex items-center gap-3">
+          <UButton
+            v-if="entry"
+            label="清除这一天"
+            icon="i-lucide-eraser"
+            color="error"
+            variant="ghost"
+            :loading="clearing"
+            :disabled="saving"
+            @click="handleClear"
+          />
+          <span v-if="dirty" class="text-xs text-ink-faint">有未保存的修改</span>
+        </div>
         <div class="flex justify-end gap-2">
           <UButton
             label="取消"
             color="neutral"
             variant="ghost"
             :disabled="busy"
-            @click="emit('update:open', false)"
+            @click="handleOpenChange(false)"
           />
           <UButton
             label="保存"

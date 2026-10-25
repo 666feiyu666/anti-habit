@@ -10,12 +10,16 @@ export default defineEventHandler(async (event) => {
   const db = getDatabase()
   await requireActiveGoal(db, id)
 
-  const { title } = await parseBody(event, updateGoalSchema)
+  const { title, essayTitle } = await parseBody(event, updateGoalSchema)
   await assertTitleAvailable(db, title, id)
 
   const [goal] = await db
     .update(goals)
-    .set({ title, updatedAt: Math.floor(Date.now() / 1000) })
+    .set({
+      title,
+      updatedAt: Math.floor(Date.now() / 1000),
+      ...(essayTitle !== undefined ? { essayTitle } : {}),
+    })
     .where(eq(goals.id, id!))
     .returning()
 
