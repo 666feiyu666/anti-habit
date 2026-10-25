@@ -4,22 +4,27 @@
 
 ## 本地运行
 
-需要 Node.js 22 以上和 pnpm。
+需要 Node.js 22 以上和 pnpm。首次先安装依赖：
 
 ```bash
 pnpm install
-pnpm dev
 ```
 
-打开 http://localhost:3000。
-
-想在本地长期使用，可以构建后启动：
+日常使用：
 
 ```bash
 pnpm build
 pnpm preview
 ```
 
-## 数据
+打开 http://localhost:3000。数据保存在 `.data/anti-habit.db`。
 
-记录保存在 `.data/anti-habit.db`。首次启动会自动创建数据库并完成迁移；备份这个文件就能保留数据。
+开发：
+
+```bash
+pnpm dev
+```
+
+打开 http://localhost:3001。开发使用单独的 `.data/anti-habit.dev.db`，不会碰日常数据。两个实例可以同时运行；日常实例用 `pnpm preview`，不要在两个端口各开一个 `pnpm dev`（Nuxt 同一个项目只允许一个 dev server）。改完代码后重新 `pnpm build` 再 `pnpm preview`。
+
+首次启动会自动创建数据库并完成迁移。备份 `.data` 目录就能保留数据。

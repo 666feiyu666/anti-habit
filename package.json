@@ -8,9 +8,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "nuxt dev",
+    "dev": "DATABASE_URL=.data/anti-habit.dev.db nuxt dev --port 3001",
     "build": "nuxt build",
-    "preview": "nuxt preview",
+    "preview": "DATABASE_URL=.data/anti-habit.db nuxt preview --port 3000",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
