@@ -93,7 +93,7 @@ async function submit() {
           v-model="title"
           class="mt-2 w-full"
           :maxlength="GOAL_TITLE_MAX_LENGTH"
-          placeholder="例如：No Pornography"
+          placeholder="例如：每天散步二十分钟"
           autofocus
           autocomplete="off"
           :disabled="saving"

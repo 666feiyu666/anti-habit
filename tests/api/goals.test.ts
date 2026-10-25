@@ -68,7 +68,7 @@ async function getEntries(goalId: string, from: string, to: string): Promise<Dai
 
 describe('goals API', () => {
   it('creates a goal, trims its title, and lists it with today status', async () => {
-    const title = uniqueTitle('No Pornography')
+    const title = uniqueTitle('Walk 20 Minutes')
     const { response, body } = await request('/api/goals', {
       method: 'POST',
       body: JSON.stringify({ title: `   ${title}   ` }),
@@ -151,7 +151,7 @@ describe('goals API', () => {
   })
 
   it('upserts completed and missed entries and clears reflections', async () => {
-    const goal = await createGoal(uniqueTitle('No Pornography'))
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
 
     const completed = await putEntry(goal.id, today, { status: 'completed', reflection: null })
     expect(completed.status).toBe('completed')
@@ -216,7 +216,7 @@ describe('goals API', () => {
   })
 
   it('soft deletes a goal while keeping its entries in SQLite', async () => {
-    const goal = await createGoal(uniqueTitle('No Pornography'))
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
     await putEntry(goal.id, today, {
       status: 'missed',
       reflection: '软删除后这条记录仍应保留。',
