@@ -1,10 +1,40 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+@theme {
+  --color-paper: #eff1ea;
+  --color-sheet: #fafaf6;
+  --color-ink: #1f241f;
+  --color-ink-soft: #5d6358;
+  --color-ink-faint: #686e64;
+  --color-rule: #d6dbd0;
+  --color-rule-strong: #b9c0b3;
+  --color-done: #1d5a41;
+  --color-done-deep: #164834;
+  --color-miss: #a83a2e;
+  --color-miss-deep: #8c2f25;
+  --color-mist: #d3e4d2;
+  --color-mist-ink: #1b4230;
+
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", ui-serif, serif;
+}
+
 :root {
   color-scheme: light;
+  --ui-primary: #1d5a41;
+  --ui-radius: 0.375rem;
+}
+
+html {
+  background-color: var(--color-paper);
 }
 
 body {
-  @apply bg-neutral-50 text-neutral-900 antialiased;
+  @apply bg-paper font-sans text-ink antialiased;
+}
+
+::selection {
+  background-color: var(--color-mist);
+  color: var(--color-mist-ink);
 }

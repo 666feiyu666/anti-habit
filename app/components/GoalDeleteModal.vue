@@ -47,16 +47,17 @@ async function confirmDelete() {
     title="删除目标"
     :dismissible="!deleting"
     :transition="false"
+    :ui="{ content: 'bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
     @update:open="emit('update:open', $event)"
   >
     <template #body>
-      <p class="text-sm leading-6 text-neutral-700">
-        确定要删除「<span class="font-medium text-neutral-900">{{ goal?.title }}</span>」吗？它会从当前目标列表中移除。
+      <p class="text-sm leading-6 text-ink-soft">
+        确定要删除「<span class="font-medium text-ink">{{ goal?.title }}</span>」吗？它会从当前目标列表中移除。
       </p>
-      <p class="mt-2 text-sm leading-6 text-neutral-500">
-        已有的每日记录会保留，但暂不提供恢复入口。
+      <p class="mt-2 text-sm leading-6 text-ink-soft">
+        记录会留着，但暂时不能恢复。
       </p>
-      <p v-if="error" class="mt-3 text-sm text-red-600" role="alert">
+      <p v-if="error" class="mt-3 text-sm text-miss" role="alert">
         {{ error }}
       </p>
     </template>
@@ -71,7 +72,7 @@ async function confirmDelete() {
           @click="emit('update:open', false)"
         />
         <UButton
-          label="删除"
+          label="删除目标"
           color="error"
           :loading="deleting"
           @click="confirmDelete"

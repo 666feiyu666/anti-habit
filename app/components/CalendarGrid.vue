@@ -56,10 +56,10 @@ const cells = computed<DayCell[]>(() => {
 })
 
 const appearanceClasses: Record<DayAppearance, string> = {
-  completed: 'bg-emerald-700 text-white hover:bg-emerald-800',
-  missed: 'bg-red-600 text-white hover:bg-red-700',
-  'reflected-miss': 'bg-green-200 text-green-950 hover:bg-green-300',
-  unrecorded: 'bg-white text-neutral-700 ring-1 ring-inset ring-neutral-200 hover:bg-neutral-50',
+  completed: 'bg-done text-white hover:bg-done-deep',
+  missed: 'bg-miss text-white hover:bg-miss-deep',
+  'reflected-miss': 'bg-mist text-mist-ink hover:bg-[#c6dbc5]',
+  unrecorded: 'bg-sheet text-ink ring-1 ring-inset ring-rule hover:bg-paper',
 }
 
 const appearanceIcons: Record<DayAppearance, string | null> = {
@@ -72,13 +72,13 @@ const appearanceIcons: Record<DayAppearance, string | null> = {
 function cellClasses(cell: DayCell): string[] {
   if (cell.isFuture) {
     return [
-      'bg-neutral-50 text-neutral-300 ring-1 ring-inset ring-neutral-100 cursor-not-allowed',
+      'bg-transparent text-ink-faint/60 cursor-not-allowed',
     ]
   }
 
   const classes = [appearanceClasses[cell.appearance]]
   if (cell.isToday) {
-    classes.push('outline outline-2 outline-offset-2 outline-emerald-600')
+    classes.push('outline outline-2 outline-offset-2 outline-done')
   }
   return classes
 }
@@ -90,16 +90,16 @@ function ariaLabel(cell: DayCell): string {
 
   if (cell.appearance === 'unrecorded') return `${prefix}，尚未记录`
   if (cell.appearance === 'completed') {
-    return `${prefix}，完成${hasReflection(cell.entry) ? '，已反思' : ''}`
+    return `${prefix}，完成${hasReflection(cell.entry) ? '，有记录' : ''}`
   }
-  if (cell.appearance === 'reflected-miss') return `${prefix}，未完成，已反思`
+  if (cell.appearance === 'reflected-miss') return `${prefix}，未完成，有记录`
   return `${prefix}，未完成`
 }
 </script>
 
 <template>
-  <div class="mt-4">
-    <div class="grid grid-cols-7 gap-1 text-center text-xs font-medium text-neutral-500" aria-hidden="true">
+  <div class="mt-4 lg:mt-5">
+    <div class="grid grid-cols-7 gap-1 text-center text-xs font-medium text-ink-faint" aria-hidden="true">
       <div v-for="day in weekdays" :key="day" class="py-1">
         {{ day }}
       </div>
@@ -107,55 +107,54 @@ function ariaLabel(cell: DayCell): string {
 
     <div class="mt-1 grid grid-cols-7 gap-1 sm:gap-1.5">
       <template v-for="cell in cells" :key="cell.date">
-        <div v-if="!cell.inMonth" class="h-12 sm:h-16" aria-hidden="true" />
+        <div v-if="!cell.inMonth" class="h-12 sm:h-14 lg:h-20" aria-hidden="true" />
         <button
           v-else
           type="button"
-          :class="['relative flex h-12 flex-col items-center justify-center rounded-xl text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed sm:h-16', cellClasses(cell)]"
+          :class="['relative flex h-12 flex-col items-center justify-center rounded-[3px] transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done disabled:cursor-not-allowed sm:h-14 lg:h-20', cellClasses(cell)]"
           :disabled="cell.isFuture"
           :aria-label="ariaLabel(cell)"
           :aria-current="cell.isToday ? 'date' : undefined"
           @click="emit('select', cell.date)"
         >
-          <span class="leading-none">{{ cell.dayNumber }}</span>
+          <span class="font-serif text-base leading-none sm:text-lg lg:text-2xl">{{ cell.dayNumber }}</span>
           <UIcon
             v-if="appearanceIcons[cell.appearance]"
             :name="appearanceIcons[cell.appearance]!"
-            class="mt-1 size-3.5"
+            class="mt-1 size-3.5 lg:size-4"
             aria-hidden="true"
           />
-          <UIcon
+          <span
             v-if="cell.entry?.status === 'completed' && hasReflection(cell.entry)"
-            name="i-lucide-notebook-pen"
-            class="absolute right-1.5 top-1.5 size-2.5 text-white/90"
+            class="absolute right-1.5 top-1.5 size-1 rounded-full bg-white/90 lg:size-1.5"
             aria-hidden="true"
           />
         </button>
       </template>
     </div>
 
-    <ul class="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-neutral-600 sm:flex sm:flex-wrap">
+    <ul class="mt-5 flex flex-wrap gap-x-5 gap-y-2 border-t border-rule pt-4 text-xs text-ink-soft">
       <li class="flex items-center gap-2">
-        <span class="size-3 shrink-0 rounded-sm bg-emerald-700" aria-hidden="true" />
+        <span class="size-2.5 shrink-0 rounded-[2px] bg-done" aria-hidden="true" />
         完成
       </li>
       <li class="flex items-center gap-2">
-        <span class="relative size-3 shrink-0 rounded-sm bg-emerald-700" aria-hidden="true">
+        <span class="relative size-2.5 shrink-0 rounded-[2px] bg-done" aria-hidden="true">
           <span class="absolute right-0.5 top-0.5 size-1 rounded-full bg-white" />
         </span>
-        完成 + reflection
+        完成，有记录
       </li>
       <li class="flex items-center gap-2">
-        <span class="size-3 shrink-0 rounded-sm bg-red-600" aria-hidden="true" />
+        <span class="size-2.5 shrink-0 rounded-[2px] bg-miss" aria-hidden="true" />
         未完成
       </li>
       <li class="flex items-center gap-2">
-        <span class="size-3 shrink-0 rounded-sm bg-green-200 ring-1 ring-inset ring-green-300" aria-hidden="true" />
-        未完成 + reflection
+        <span class="size-2.5 shrink-0 rounded-[2px] bg-mist ring-1 ring-inset ring-[#b7cfb6]" aria-hidden="true" />
+        未完成，有记录
       </li>
       <li class="flex items-center gap-2">
-        <span class="size-3 shrink-0 rounded-sm bg-white ring-1 ring-inset ring-neutral-300" aria-hidden="true" />
-        未记录
+        <span class="size-2.5 shrink-0 rounded-[2px] bg-sheet ring-1 ring-inset ring-rule-strong" aria-hidden="true" />
+        尚未记录
       </li>
     </ul>
   </div>

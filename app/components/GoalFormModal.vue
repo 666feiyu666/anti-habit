@@ -25,7 +25,7 @@ watch(() => props.open, (open) => {
 
 const normalizedTitle = computed(() => title.value.trim())
 const heading = computed(() => props.mode === 'create' ? '新增目标' : '重命名目标')
-const submitLabel = computed(() => props.mode === 'create' ? '创建' : '保存')
+const submitLabel = computed(() => props.mode === 'create' ? '创建目标' : '保存名称')
 
 async function submit() {
   if (saving.value) return
@@ -75,15 +75,16 @@ async function submit() {
     :title="heading"
     :dismissible="!saving"
     :transition="false"
+    :ui="{ content: 'bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
     @update:open="emit('update:open', $event)"
   >
     <template #body>
       <form id="goal-form" novalidate @submit.prevent="submit">
         <div class="flex items-center justify-between gap-3">
-          <label for="goal-title" class="text-sm font-medium text-neutral-800">
+          <label for="goal-title" class="text-sm font-medium text-ink">
             目标名称
           </label>
-          <span class="text-xs tabular-nums text-neutral-500">
+          <span class="text-xs tabular-nums text-ink-faint">
             {{ title.length }}/{{ GOAL_TITLE_MAX_LENGTH }}
           </span>
         </div>
@@ -97,7 +98,7 @@ async function submit() {
           autocomplete="off"
           :disabled="saving"
         />
-        <p v-if="error" class="mt-2 text-sm text-red-600" role="alert">
+        <p v-if="error" class="mt-2 text-sm text-miss" role="alert">
           {{ error }}
         </p>
       </form>
