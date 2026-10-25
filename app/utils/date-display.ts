@@ -1,0 +1,18 @@
+import { format, parseISO } from 'date-fns'
+import { zhCN } from 'date-fns/locale'
+
+export function formatDayLabel(date: string): string {
+  return format(parseISO(date), 'M月d日')
+}
+
+export function formatFullDayLabel(date: string): string {
+  return format(parseISO(date), 'yyyy年M月d日 EEEE', { locale: zhCN })
+}
+
+export function formatMonthLabel(anchor: Date): string {
+  return format(anchor, 'yyyy年M月')
+}
+
+export function formatDateKey(date: Date): string {
+  return format(date, 'yyyy-MM-dd')
+}
