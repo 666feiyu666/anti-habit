@@ -15,6 +15,13 @@
       "when": 1792932426915,
       "tag": "0001_essays",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793452680673,
+      "tag": "0002_special_saracen",
+      "breakpoints": true
     }
   ]
 }

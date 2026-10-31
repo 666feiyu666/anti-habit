@@ -166,11 +166,6 @@ async function openEssay(goal: GoalSummary) {
   await loadEssay(goal)
 }
 
-async function handleEssayImported() {
-  await Promise.all([refresh(), refreshEntries()])
-  if (readerGoal.value) await loadEssay(readerGoal.value)
-}
-
 function previousMonth() {
   monthAnchor.value = addMonths(monthAnchor.value, -1)
 }
@@ -436,9 +431,7 @@ onMounted(() => {
       :entries="essayEntries"
       :pending="essayPending"
       :error="essayError"
-      :fallback-date="selectedDate"
       @select-date="openReaderDate"
-      @imported="handleEssayImported"
     />
   </div>
 </template>

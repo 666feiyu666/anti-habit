@@ -5,7 +5,14 @@ import Database from 'better-sqlite3'
 import { addDays } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 import { fetch, setup } from '@nuxt/test-utils/e2e'
-import type { DailyEntryWithLinks, EssayEntry, Goal, GoalSummary } from '../../shared/types'
+import type {
+  DailyEntryWithLinks,
+  EssayEntry,
+  Goal,
+  GoalMaterial,
+  GoalMaterialSummary,
+  GoalSummary,
+} from '../../shared/types'
 import { todayDateOnly } from '../../shared/utils/date'
 
 const tempDir = await mkdtemp(join(tmpdir(), 'anti-habit-api-'))
@@ -79,21 +86,32 @@ async function getEssays(goalId: string): Promise<EssayEntry[]> {
   return body.entries as EssayEntry[]
 }
 
-async function importEssay(
+async function createMaterial(
   goalId: string,
-  entries: Array<{
-    entryDate: string
-    status: 'completed' | 'missed'
-    reflection: string
-    linkedEntryDates?: string[]
-  }>,
-) {
-  const { response, body } = await request(`/api/goals/${goalId}/essays/import`, {
+  payload: {
+    title?: string
+    content: string
+    sourceName?: string
+  },
+): Promise<GoalMaterial> {
+  const { response, body } = await request(`/api/goals/${goalId}/materials`, {
     method: 'POST',
-    body: JSON.stringify({ entries }),
+    body: JSON.stringify(payload),
   })
+  expect(response.status).toBe(201)
+  return body.material as GoalMaterial
+}
+
+async function listMaterials(goalId: string): Promise<GoalMaterialSummary[]> {
+  const { response, body } = await request(`/api/goals/${goalId}/materials`)
   expect(response.status).toBe(200)
-  return body as { imported: number }
+  return body.materials as GoalMaterialSummary[]
+}
+
+async function getMaterial(goalId: string, materialId: string): Promise<GoalMaterial> {
+  const { response, body } = await request(`/api/goals/${goalId}/materials/${materialId}`)
+  expect(response.status).toBe(200)
+  return body.material as GoalMaterial
 }
 
 describe('goals API', () => {
@@ -536,104 +554,123 @@ describe('goals API', () => {
     expect(afterRestore[1]?.incoming[0]?.entryId).toBe(late.id)
   })
 
-  it('imports multiple dated entries and links them in one transaction', async () => {
+  it('imports markdown as goal materials without touching daily entries', async () => {
     const goal = await createGoal(uniqueTitle('Read Before Bed'))
-
-    const result = await importEssay(goal.id, [
-      {
-        entryDate: '2026-07-14',
-        status: 'missed',
-        reflection: '第一篇。',
-      },
-      {
-        entryDate: '2026-08-11',
-        status: 'completed',
-        reflection: '第二篇。',
-        linkedEntryDates: ['2026-07-14'],
-      },
-    ])
-    expect(result.imported).toBe(2)
-
-    const essays = await getEssays(goal.id)
-    expect(essays.map(item => item.entry.entryDate)).toEqual(['2026-08-11', '2026-07-14'])
-    expect(essays[0]?.outgoing[0]?.entryDate).toBe('2026-07-14')
-    expect(essays[1]?.incoming[0]?.entryDate).toBe('2026-08-11')
-  })
-
-  it('overwrites the same date while keeping the entry id', async () => {
-    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
-    const original = await putEntry(goal.id, '2026-07-14', {
-      status: 'completed',
-      reflection: '原稿。',
+    await putEntry(goal.id, today, {
+      status: 'missed',
+      reflection: '今天的日记。',
     })
 
-    await importEssay(goal.id, [{
-      entryDate: '2026-07-14',
-      status: 'missed',
-      reflection: '导入稿。',
+    const content = '# 素材标题\n\n第一段。\n\n- 列表项\n'
+    const material = await createMaterial(goal.id, {
+      title: '写作材料',
+      content,
+      sourceName: 'material.md',
+    })
+
+    expect(material.goalId).toBe(goal.id)
+    expect(material.title).toBe('写作材料')
+    expect(material.sourceName).toBe('material.md')
+    expect(material.content).toBe(content)
+    expect(material.createdAt).toBeTypeOf('number')
+    expect(material.updatedAt).toBe(material.createdAt)
+
+    const summaries = await listMaterials(goal.id)
+    expect(summaries).toEqual([{
+      id: material.id,
+      goalId: goal.id,
+      title: '写作材料',
+      sourceName: 'material.md',
+      characterCount: content.length,
+      createdAt: material.createdAt,
+      updatedAt: material.updatedAt,
     }])
+    expect(summaries[0]).not.toHaveProperty('content')
 
-    const entries = await getEntries(goal.id, '2026-07-14', '2026-07-14')
-    expect(entries[0]).toMatchObject({
-      id: original.id,
-      status: 'missed',
-      reflection: '导入稿。',
-    })
+    expect(await getMaterial(goal.id, material.id)).toEqual(material)
+
+    const entries = await getEntries(goal.id, today, today)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.reflection).toBe('今天的日记。')
+    expect(await getEssays(goal.id)).toHaveLength(1)
   })
 
-  it('rejects invalid imports without saving any entry', async () => {
+  it('derives a title from the source name and normalizes line endings', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+    const material = await createMaterial(goal.id, {
+      content: '\uFEFF# 标题\r\n\r\n第一行。\r\n第二行。',
+      sourceName: 'notes/我的材料.md',
+    })
+
+    expect(material.title).toBe('我的材料')
+    expect(material.sourceName).toBe('notes/我的材料.md')
+    expect(material.content).toBe('# 标题\n\n第一行。\n第二行。')
+  })
+
+  it('updates and deletes a material', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+    const material = await createMaterial(goal.id, {
+      title: '初稿',
+      content: '第一版。',
+      sourceName: 'draft.md',
+    })
+
+    const updated = await request(`/api/goals/${goal.id}/materials/${material.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title: '  定稿  ', content: '第二版。\n' }),
+    })
+    expect(updated.response.status).toBe(200)
+    expect(updated.body.material).toMatchObject({
+      id: material.id,
+      goalId: goal.id,
+      title: '定稿',
+      content: '第二版。\n',
+      sourceName: 'draft.md',
+    })
+    expect(updated.body.material.createdAt).toBe(material.createdAt)
+
+    const deleted = await request(`/api/goals/${goal.id}/materials/${material.id}`, {
+      method: 'DELETE',
+    })
+    expect(deleted.response.status).toBe(200)
+    expect(deleted.body.deleted).toBe(true)
+    expect(await listMaterials(goal.id)).toEqual([])
+
+    const missing = await request(`/api/goals/${goal.id}/materials/${material.id}`)
+    expect(missing.response.status).toBe(404)
+    expect(missing.body.data.code).toBe('MATERIAL_NOT_FOUND')
+  })
+
+  it('rejects empty materials, invalid updates, and cross-goal access', async () => {
     const goal = await createGoal(uniqueTitle('Read Before Bed'))
+    const other = await createGoal(uniqueTitle('Walk 20 Minutes'))
 
-    const missingTarget = await request(`/api/goals/${goal.id}/essays/import`, {
+    const empty = await request(`/api/goals/${goal.id}/materials`, {
       method: 'POST',
-      body: JSON.stringify({
-        entries: [
-          {
-            entryDate: '2026-07-14',
-            status: 'completed',
-            reflection: '先写一篇。',
-          },
-          {
-            entryDate: '2026-08-11',
-            status: 'completed',
-            reflection: '再写一篇。',
-            linkedEntryDates: ['2026-01-01'],
-          },
-        ],
-      }),
+      body: JSON.stringify({ content: '   ' }),
     })
-    expect(missingTarget.response.status).toBe(400)
-    expect(missingTarget.body.data.code).toBe('INVALID_LINK')
-    expect(await getEssays(goal.id)).toHaveLength(0)
+    expect(empty.response.status).toBe(400)
+    expect(empty.body.data.code).toBe('INVALID_INPUT')
+    expect(empty.body.data.message).toBe('材料正文不能为空')
 
-    const duplicate = await request(`/api/goals/${goal.id}/essays/import`, {
-      method: 'POST',
-      body: JSON.stringify({
-        entries: [
-          { entryDate: '2026-07-14', status: 'completed', reflection: '第一篇。' },
-          { entryDate: '2026-07-14', status: 'missed', reflection: '第二篇。' },
-        ],
-      }),
+    const material = await createMaterial(goal.id, {
+      title: '材料',
+      content: '正文。',
     })
-    expect(duplicate.response.status).toBe(400)
-    expect(duplicate.body.data.code).toBe('DUPLICATE_DATE')
 
-    const future = await request(`/api/goals/${goal.id}/essays/import`, {
-      method: 'POST',
-      body: JSON.stringify({
-        entries: [{ entryDate: tomorrow, status: 'completed', reflection: '未来。' }],
-      }),
-    })
-    expect(future.response.status).toBe(400)
-    expect(future.body.data.code).toBe('FUTURE_DATE')
+    const crossGoal = await request(`/api/goals/${other.id}/materials/${material.id}`)
+    expect(crossGoal.response.status).toBe(404)
+    expect(crossGoal.body.data.code).toBe('MATERIAL_NOT_FOUND')
 
-    const invalidDate = await request(`/api/goals/${goal.id}/essays/import`, {
-      method: 'POST',
-      body: JSON.stringify({
-        entries: [{ entryDate: '2026-02-30', status: 'completed', reflection: '无效日期。' }],
-      }),
+    const emptyTitle = await request(`/api/goals/${goal.id}/materials/${material.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title: '   ', content: '正文。' }),
     })
-    expect(invalidDate.response.status).toBe(400)
-    expect(invalidDate.body.data.code).toBe('INVALID_DATE')
+    expect(emptyTitle.response.status).toBe(400)
+    expect(emptyTitle.body.data.message).toBe('材料标题不能为空')
+
+    const unknownGoal = await request('/api/goals/00000000-0000-4000-8000-000000000000/materials')
+    expect(unknownGoal.response.status).toBe(404)
+    expect(unknownGoal.body.data.code).toBe('GOAL_NOT_FOUND')
   })
 })

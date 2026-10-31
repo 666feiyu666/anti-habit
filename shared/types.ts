@@ -40,9 +40,16 @@ export interface EssayEntry {
   incoming: EssayReference[]
 }
 
-export interface ImportedEssayEntry {
-  entryDate: string
-  status: EntryStatus
-  reflection: string
-  linkedEntryDates: string[]
+export interface GoalMaterialSummary {
+  id: string
+  goalId: string
+  title: string
+  sourceName: string | null
+  characterCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface GoalMaterial extends Omit<GoalMaterialSummary, 'characterCount'> {
+  content: string
 }

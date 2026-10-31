@@ -4,6 +4,9 @@ export const GOAL_TITLE_MAX_LENGTH = 80
 export const ESSAY_TITLE_MAX_LENGTH = 120
 export const REFLECTION_MAX_LENGTH = 10_000
 export const ENTRIES_RANGE_MAX_DAYS = 366
+export const MATERIAL_TITLE_MAX_LENGTH = 200
+export const MATERIAL_SOURCE_NAME_MAX_LENGTH = 255
+export const MATERIAL_CONTENT_MAX_LENGTH = 2_000_000
 
 export const goalTitleSchema = z
   .string()
@@ -49,32 +52,53 @@ export const upsertEntrySchema = z.object({
   }
 })
 
-export const dateOnlySchema = z
+export const materialTitleSchema = z
   .string()
-  .refine(value => /^\d{4}-\d{2}-\d{2}$/.test(value), '日期格式必须是 YYYY-MM-DD')
+  .trim()
+  .min(1, '材料标题不能为空')
+  .max(MATERIAL_TITLE_MAX_LENGTH, `材料标题不能超过 ${MATERIAL_TITLE_MAX_LENGTH} 个字符`)
 
-export const importEssayEntrySchema = z.object({
-  entryDate: dateOnlySchema,
-  status: entryStatusSchema,
-  reflection: z
-    .string()
-    .trim()
-    .min(1, '导入的正文不能为空')
-    .max(REFLECTION_MAX_LENGTH, `正文不能超过 ${REFLECTION_MAX_LENGTH} 个字符`),
-  linkedEntryDates: z
-    .array(dateOnlySchema)
-    .optional()
-    .default([]),
+export const materialContentSchema = z
+  .string()
+  .refine(
+    value => value.replace(/^\uFEFF/, '').trim().length > 0,
+    '材料正文不能为空',
+  )
+  .refine(
+    value => value.length <= MATERIAL_CONTENT_MAX_LENGTH,
+    `材料正文不能超过 ${MATERIAL_CONTENT_MAX_LENGTH} 个字符`,
+  )
+  .transform(value => value.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'))
+
+export const materialSourceNameSchema = z
+  .string()
+  .trim()
+  .max(
+    MATERIAL_SOURCE_NAME_MAX_LENGTH,
+    `文件名不能超过 ${MATERIAL_SOURCE_NAME_MAX_LENGTH} 个字符`,
+  )
+  .nullish()
+  .transform(value => value ? value : null)
+
+export const createMaterialSchema = z.object({
+  title: materialTitleSchema.optional(),
+  content: materialContentSchema,
+  sourceName: materialSourceNameSchema,
+}).transform(({ title, content, sourceName }) => ({
+  title: title || materialTitleFromSourceName(sourceName),
+  content,
+  sourceName,
+}))
+
+export const updateMaterialSchema = z.object({
+  title: materialTitleSchema,
+  content: materialContentSchema,
 })
 
-export const importEssaySchema = z.object({
-  entries: z
-    .array(importEssayEntrySchema)
-    .min(1, '没有可导入的正文')
-    .max(1000, '一次最多导入 1000 天'),
-}).transform(({ entries }) => ({
-  entries: entries.map(entry => ({
-    ...entry,
-    linkedEntryDates: [...new Set(entry.linkedEntryDates)],
-  })),
-}))
+export function materialTitleFromSourceName(sourceName: string | null | undefined): string {
+  if (!sourceName) return '未命名材料'
+
+  const withoutPath = sourceName.split(/[\\/]/).pop() ?? sourceName
+  const withoutExtension = withoutPath.replace(/\.(?:md|markdown|txt)$/i, '').trim()
+  return withoutExtension || '未命名材料'
+}

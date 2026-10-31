@@ -30,6 +30,25 @@ export const dailyEntries = sqliteTable(
   ],
 )
 
+export const goalMaterials = sqliteTable(
+  'goal_materials',
+  {
+    id: text('id').primaryKey(),
+    goalId: text('goal_id')
+      .notNull()
+      .references(() => goals.id),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    sourceName: text('source_name'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  table => [
+    index('goal_materials_goal_id_idx').on(table.goalId),
+    check('goal_materials_title_check', sql`length(trim(${table.title})) > 0`),
+  ],
+)
+
 export const entryLinks = sqliteTable(
   'entry_links',
   {
@@ -55,3 +74,5 @@ export type DailyEntryRow = typeof dailyEntries.$inferSelect
 export type NewDailyEntryRow = typeof dailyEntries.$inferInsert
 export type EntryLinkRow = typeof entryLinks.$inferSelect
 export type NewEntryLinkRow = typeof entryLinks.$inferInsert
+export type GoalMaterialRow = typeof goalMaterials.$inferSelect
+export type NewGoalMaterialRow = typeof goalMaterials.$inferInsert
