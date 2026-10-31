@@ -47,12 +47,12 @@ async function confirmDelete() {
     title="删除目标"
     :dismissible="!deleting"
     :transition="false"
-    :ui="{ content: 'bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
+    :ui="{ content: 'modal-panel bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
     @update:open="emit('update:open', $event)"
   >
     <template #body>
       <p class="text-sm leading-6 text-ink-soft">
-        确定要删除「<span class="font-medium text-ink">{{ goal?.title }}</span>」吗？它会从当前目标列表中移除。
+        确定要删除「<span class="font-medium text-ink">{{ goal?.title }}</span>」吗？它会从书架上移除。
       </p>
       <p class="mt-2 text-sm leading-6 text-ink-soft">
         记录会留着，但暂时不能恢复。

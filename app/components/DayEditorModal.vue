@@ -68,7 +68,7 @@ async function handleClear() {
     :dismissible="!busy"
     :transition="false"
     scrollable
-    :ui="{ content: 'bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
+    :ui="{ content: 'modal-panel bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
     @update:open="handleOpenChange"
   >
     <template #body>

@@ -43,16 +43,20 @@ const menuItems = computed(() => [
 
 <template>
   <article
-    class="group border-l-2 py-3 pl-3 pr-1 transition-colors motion-reduce:transition-none"
-    :class="selected ? 'border-done bg-sheet' : 'border-transparent hover:bg-sheet/70'"
+    class="book-item group py-4 pl-4 pr-2"
+    :data-selected="selected"
   >
+    <span v-if="selected" class="book-ribbon" aria-hidden="true" />
     <button
       type="button"
       class="block w-full min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
       :aria-pressed="selected"
       @click="emit('select')"
     >
-      <span class="block truncate font-serif text-xl leading-7 text-ink">
+      <span
+        class="block truncate font-serif text-xl leading-7 transition-colors motion-reduce:transition-none"
+        :class="selected ? 'text-done' : 'text-ink group-hover:text-done'"
+      >
         {{ goal.essayTitle || '随笔' }}
       </span>
       <span class="mt-0.5 block truncate text-sm text-ink-soft">
@@ -70,9 +74,10 @@ const menuItems = computed(() => [
     <div class="mt-2 flex items-center justify-between gap-2">
       <button
         type="button"
-        class="text-xs text-done hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+        class="inline-flex items-center gap-1.5 text-xs text-done/90 underline-offset-4 hover:text-done hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
         @click="emit('openEssay')"
       >
+        <UIcon name="i-lucide-book-open" class="size-3.5" aria-hidden="true" />
         打开随笔
       </button>
 

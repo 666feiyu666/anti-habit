@@ -42,7 +42,7 @@ function toggle(entryId: string, checked: boolean) {
       </span>
     </div>
     <p class="mt-1 text-xs leading-5 text-ink-soft">
-      选中以前写下的日子，这一天会接在它们后面。
+      选中以前写下的日子，这一天会接在它们之后。
     </p>
     <p v-if="hiddenSelectedCount" class="mt-1 text-xs leading-5 text-ink-faint">
       有 {{ hiddenSelectedCount }} 个关联的日期暂时看不到，保存时会保留。
@@ -60,7 +60,10 @@ function toggle(entryId: string, checked: boolean) {
 
     <ul v-else class="mt-2 max-h-64 divide-y divide-rule overflow-y-auto border-y border-rule">
       <li v-for="item in candidates" :key="item.entry.id">
-        <label class="flex cursor-pointer gap-3 py-3">
+        <label
+          class="flex cursor-pointer gap-3 px-2 py-3 transition-colors hover:bg-paper/60"
+          :class="selected.includes(item.entry.id) ? 'bg-done-soft/30' : ''"
+        >
           <input
             type="checkbox"
             class="mt-1 size-4 shrink-0 accent-done"

@@ -80,6 +80,15 @@ const selectedEntry = computed(() => (
 const currentAppearance = computed(() => getDayAppearance(selectedGoal.value?.todayEntry))
 const isCurrentMonth = computed(() => monthKey.value === format(parseISO(today.value), 'yyyy-MM'))
 
+const monthStats = computed(() => {
+  const monthEntries = entries.value.filter(entry => entry.entryDate.startsWith(monthKey.value))
+  return {
+    completed: monthEntries.filter(entry => entry.status === 'completed').length,
+    missed: monthEntries.filter(entry => entry.status === 'missed').length,
+    written: monthEntries.filter(entry => Boolean(entry.reflection?.trim())).length,
+  }
+})
+
 const isCreateOpen = ref(false)
 const editTarget = ref<GoalSummary | null>(null)
 const deleteTarget = ref<GoalSummary | null>(null)
@@ -232,16 +241,17 @@ onMounted(() => {
 <template>
   <div class="min-h-dvh">
     <main class="mx-auto w-full max-w-6xl px-5 py-8 sm:px-6 lg:px-10 lg:py-12">
-      <header class="flex flex-wrap items-baseline justify-between gap-3 border-b border-rule pb-5">
+      <header class="reveal flex flex-wrap items-end justify-between gap-4 border-b border-rule pb-6">
         <div>
-          <p class="font-serif text-2xl tracking-tight text-ink">
+          <p class="font-serif text-[1.7rem] leading-none tracking-tight text-ink">
             Anti-Habit
           </p>
-          <p class="mt-1 text-sm text-ink-soft">
+          <p class="mt-2 flex items-center gap-2 text-sm text-ink-soft">
+            <span class="inline-block h-px w-6 bg-brass/70" aria-hidden="true" />
             {{ todayLabel }}
           </p>
         </div>
-        <p class="hidden max-w-xs text-pretty text-xs leading-5 text-ink-faint sm:block">
+        <p class="hidden max-w-[17rem] border-l border-rule-strong/70 pl-4 font-serif text-sm italic leading-6 text-ink-soft sm:block">
           一次打卡，也可以是一篇随笔的开头。
         </p>
       </header>
@@ -269,7 +279,7 @@ onMounted(() => {
         v-else-if="selectedGoal"
         class="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12"
       >
-        <section aria-labelledby="calendar-heading">
+        <section class="reveal reveal-late" aria-labelledby="calendar-heading">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <h1 class="truncate font-serif text-3xl tracking-tight text-ink sm:text-4xl">
@@ -298,14 +308,14 @@ onMounted(() => {
                 color="neutral"
                 variant="soft"
                 class="shrink-0"
-                aria-label="目标完成情况"
+                aria-label="目标进度"
                 @click="targetsOpen = true"
               />
             </div>
           </div>
 
           <div
-            class="mt-6 border border-rule bg-sheet p-4 sm:p-6"
+            class="paper-stack paper-card relative mt-6 p-4 sm:p-6"
             aria-labelledby="calendar-heading"
           >
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -343,6 +353,21 @@ onMounted(() => {
               </div>
             </div>
 
+            <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-rule/70 pt-4 text-xs text-ink-soft">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="size-1.5 rounded-full bg-done" aria-hidden="true" />
+                <strong class="font-medium tabular-nums text-ink">{{ monthStats.completed }}</strong> 天完成
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="size-1.5 rounded-full bg-miss" aria-hidden="true" />
+                <strong class="font-medium tabular-nums text-ink">{{ monthStats.missed }}</strong> 天未完成
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="size-1.5 rounded-full bg-brass" aria-hidden="true" />
+                <strong class="font-medium tabular-nums text-ink">{{ monthStats.written }}</strong> 天有记录
+              </span>
+            </div>
+
             <UAlert
               v-if="entriesError"
               color="error"
@@ -365,7 +390,7 @@ onMounted(() => {
           </p>
         </section>
 
-        <aside aria-labelledby="shelf-heading">
+        <aside class="reveal reveal-later" aria-labelledby="shelf-heading">
           <div class="flex items-center justify-between gap-3 border-b border-rule pb-3">
             <h2 id="shelf-heading" class="font-serif text-2xl text-ink">
               书架
@@ -378,11 +403,12 @@ onMounted(() => {
             />
           </div>
 
-          <p class="mt-2 text-xs leading-5 text-ink-faint">
-            {{ goals.length }} 本。选一本，左边的日历会跟着切换。
+          <p class="mt-2 flex items-center gap-2 text-xs leading-5 text-ink-faint">
+            <span class="rounded-sm bg-paper px-1.5 py-0.5 tabular-nums text-ink-soft">{{ goals.length }} 本</span>
+            选一本，日历会跟着切换。
           </p>
 
-          <ul class="mt-2 divide-y divide-rule">
+          <ul class="mt-2 divide-y divide-rule/70">
             <li v-for="goal in goals" :key="goal.id">
               <EssayBook
                 :goal="goal"
@@ -394,22 +420,34 @@ onMounted(() => {
               />
             </li>
           </ul>
+
+          <div class="mt-8 border-t border-rule/70 pt-4">
+            <p class="flex items-start gap-2 font-serif text-sm italic leading-7 text-ink-faint">
+              <span class="mt-2.5 inline-block h-px w-4 shrink-0 bg-brass/70" aria-hidden="true" />
+              随笔不会一次写完。它跟着日历，一天一天长出来。
+            </p>
+          </div>
         </aside>
       </div>
 
-      <section v-else-if="!error" class="mt-12 max-w-md">
-        <h1 class="font-serif text-3xl text-ink">
+      <section v-else-if="!error" class="reveal mt-16 max-w-lg">
+        <p class="font-serif text-5xl leading-tight tracking-tight text-ink sm:text-6xl">
           还没有目标
-        </h1>
-        <p class="mt-3 text-sm leading-6 text-ink-soft">
+        </p>
+        <p class="mt-5 max-w-md text-sm leading-7 text-ink-soft">
           写下一个想持续观察的目标。比如，晚上十一点后不看手机。
         </p>
-        <UButton
-          class="mt-6"
-          icon="i-lucide-plus"
-          label="新增目标"
-          @click="isCreateOpen = true"
-        />
+        <div class="mt-8 flex flex-wrap items-center gap-4">
+          <UButton
+            icon="i-lucide-plus"
+            label="写下第一个目标"
+            @click="isCreateOpen = true"
+          />
+          <span class="inline-flex items-center gap-2 text-xs text-ink-faint">
+            <span class="size-1.5 rounded-full bg-brass" aria-hidden="true" />
+            从今天开始，不必等到明天
+          </span>
+        </div>
       </section>
     </main>
 

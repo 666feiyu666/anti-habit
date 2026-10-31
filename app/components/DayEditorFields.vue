@@ -24,10 +24,10 @@ const renderedReflection = computed(() => renderMarkdown(reflection.value))
 function statusClasses(value: EntryStatus): string {
   if (status.value === value) {
     return value === 'completed'
-      ? 'border-done bg-done text-white'
-      : 'border-miss bg-miss text-white'
+      ? 'border-done bg-done text-white shadow-[0_8px_20px_-14px_rgba(29,90,65,.9)]'
+      : 'border-miss bg-miss text-white shadow-[0_8px_20px_-14px_rgba(168,58,46,.9)]'
   }
-  return 'border-rule bg-transparent text-ink-soft hover:border-rule-strong hover:text-ink'
+  return 'border-rule bg-paper/40 text-ink-soft hover:-translate-y-0.5 hover:border-rule-strong hover:bg-paper hover:text-ink active:translate-y-0'
 }
 </script>
 
@@ -44,7 +44,7 @@ function statusClasses(value: EntryStatus): string {
       >
         <button
           type="button"
-          class="flex h-11 items-center justify-center gap-2 rounded-md border text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done disabled:cursor-not-allowed disabled:opacity-60"
+          class="flex h-11 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
           :class="statusClasses('completed')"
           :aria-pressed="status === 'completed'"
           :disabled="busy"
@@ -55,7 +55,7 @@ function statusClasses(value: EntryStatus): string {
         </button>
         <button
           type="button"
-          class="flex h-11 items-center justify-center gap-2 rounded-md border text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done disabled:cursor-not-allowed disabled:opacity-60"
+          class="flex h-11 items-center justify-center gap-2 rounded-md border text-sm font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
           :class="statusClasses('missed')"
           :aria-pressed="status === 'missed'"
           :disabled="busy"
@@ -111,7 +111,7 @@ function statusClasses(value: EntryStatus): string {
         v-if="mode === 'write'"
         :id="reflectionId"
         v-model="reflection"
-        class="mt-2 min-h-32 w-full resize-y rounded-md border border-rule bg-sheet px-3 py-2.5 font-serif text-[15px] leading-7 text-ink placeholder:text-ink-faint focus:border-done focus:outline-none focus:ring-2 focus:ring-done/15 disabled:opacity-60"
+        class="mt-2 min-h-32 w-full resize-y rounded-md border border-rule bg-sheet px-3 py-2.5 font-serif text-[15px] leading-7 text-ink transition-colors placeholder:text-ink-faint focus:border-done focus:outline-none focus:ring-2 focus:ring-done/15 disabled:opacity-60"
         :rows="6"
         :maxlength="REFLECTION_MAX_LENGTH"
         :disabled="busy"

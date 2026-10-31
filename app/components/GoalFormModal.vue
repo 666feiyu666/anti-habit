@@ -67,7 +67,7 @@ async function submit() {
     emit('update:open', false)
     emit('saved', saved.goal)
     toast.add({
-      title: props.mode === 'create' ? '已新增目标' : '已保存',
+      title: props.mode === 'create' ? '目标已创建' : '目标已保存',
       color: 'neutral',
     })
   } catch (caught) {
@@ -84,7 +84,7 @@ async function submit() {
     :title="heading"
     :dismissible="!saving"
     :transition="false"
-    :ui="{ content: 'bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
+    :ui="{ content: 'modal-panel bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
     @update:open="emit('update:open', $event)"
   >
     <template #body>

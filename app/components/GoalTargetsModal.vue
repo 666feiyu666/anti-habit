@@ -29,8 +29,8 @@ const deletingId = ref<string | null>(null)
 const claimingId = ref<string | null>(null)
 
 const formHint = computed(() => formType.value === 'streak'
-  ? '按历史最长连续天数判定达成；今天还没记录时，当前连续不会立刻清零。'
-  : '按从目标创建日起累计的完成天数判定；任何一天完成都计入。')
+  ? '按历史最长的连续天数判定达成；今天还没记录时，当前连续不会立刻清零。'
+  : '按从目标创建日起累计的完成天数判定，任何一天完成都算。')
 
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -131,7 +131,7 @@ async function saveTarget() {
 
   const count = Number(formCount.value)
   if (!Number.isInteger(count) || count < GOAL_TARGET_COUNT_MIN || count > GOAL_TARGET_COUNT_MAX) {
-    error.value = `目标天数需要是 ${GOAL_TARGET_COUNT_MIN} 到 ${GOAL_TARGET_COUNT_MAX} 之间的整数`
+    error.value = `目标天数需为 ${GOAL_TARGET_COUNT_MIN} 到 ${GOAL_TARGET_COUNT_MAX} 之间的整数`
     return
   }
 
@@ -155,7 +155,7 @@ async function saveTarget() {
         method: 'POST',
         body,
       })
-      toast.add({ title: '已新增目标设定', color: 'neutral' })
+      toast.add({ title: '目标设定已添加', color: 'neutral' })
     }
 
     formOpen.value = false
@@ -223,12 +223,12 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
 <template>
   <UModal
     :open="open"
-    title="目标完成情况"
+    title="目标进度"
     :description="goal?.title"
     :transition="false"
     scrollable
     :ui="{
-      content: 'bg-sheet sm:max-w-2xl',
+      content: 'modal-panel bg-sheet sm:max-w-2xl',
       header: 'border-b border-rule',
       title: 'font-serif text-2xl text-ink',
       description: 'text-sm text-ink-soft',
@@ -240,7 +240,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-3">
         <p class="max-w-md text-xs leading-5 text-ink-faint">
-          给这个议题设定要达成的事，可以同时设多个。目标从议题创建当天开始计算。
+          这个目标可以同时设多个目标设定，每项从目标创建当天开始计算。
         </p>
         <UButton
           label="新增目标设定"
@@ -251,7 +251,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
         />
       </div>
 
-      <div v-if="formOpen" class="mt-4 border border-rule bg-paper/60 p-4">
+      <div v-if="formOpen" class="reveal mt-4 border border-rule bg-paper/60 p-4">
         <p class="text-sm font-medium text-ink">
           {{ editingId ? '编辑目标设定' : '新增目标设定' }}
         </p>
@@ -360,11 +360,14 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
         </div>
       </div>
 
-      <div v-else-if="!targets.length" class="py-14">
-        <p class="font-serif text-xl text-ink">
+      <div v-else-if="!targets.length" class="py-14 text-center">
+        <div class="mx-auto flex size-12 items-center justify-center rounded-full border border-rule bg-paper/60">
+          <UIcon name="i-lucide-target" class="size-5 text-ink-faint" aria-hidden="true" />
+        </div>
+        <p class="mt-4 font-serif text-xl text-ink">
           还没有目标设定
         </p>
-        <p class="mt-2 text-sm leading-6 text-ink-soft">
+        <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">
           可以设一个“连续 30 天”，也可以再设一个“累积 100 天”。
         </p>
       </div>
@@ -378,7 +381,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
           <div class="flex flex-wrap items-start justify-between gap-2">
             <div>
               <p class="text-xs text-ink-soft">
-                {{ typeLabel(target.type) }}目标
+                {{ typeLabel(target.type) }}
               </p>
               <p class="mt-0.5 font-serif text-2xl leading-8 text-ink">
                 {{ target.count }} 天
@@ -386,14 +389,15 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
             </div>
             <span
               v-if="target.progress.achieved"
-              class="rounded-sm bg-mist px-2 py-1 text-xs text-mist-ink"
+              class="inline-flex items-center gap-1 rounded-sm bg-mist px-2 py-1 text-xs text-mist-ink"
             >
+              <UIcon name="i-lucide-check" class="size-3" aria-hidden="true" />
               已达成
             </span>
           </div>
 
           <div
-            class="mt-3 h-2 overflow-hidden rounded-sm bg-rule/50"
+            class="mt-3 h-2.5 overflow-hidden rounded-full bg-rule/50 shadow-[inset_0_1px_2px_rgba(30,36,31,.12)]"
             role="progressbar"
             :aria-valuenow="percentOf(target)"
             aria-valuemin="0"
@@ -401,7 +405,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
             :aria-label="`${typeLabel(target.type)} ${target.count} 天进度`"
           >
             <div
-              class="h-full bg-done transition-[width] motion-reduce:transition-none"
+              class="h-full rounded-full bg-gradient-to-r from-done to-[#2f7a58] transition-[width] duration-500 motion-reduce:transition-none"
               :style="{ width: `${percentOf(target)}%` }"
             />
           </div>
@@ -412,43 +416,45 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
           </div>
 
           <p class="mt-1 text-xs text-ink-faint">
-            从 {{ formatDate(target.progress.startDate) }} 起算
+            从 {{ formatDate(target.progress.startDate) }} 开始计算
             <span v-if="target.progress.achievedOn">
               · 达成于 {{ formatDate(target.progress.achievedOn) }}
             </span>
           </p>
 
-          <div v-if="target.reward" class="mt-3 rounded-sm border border-rule bg-paper/60 p-3">
+          <div v-if="target.reward" class="reward-ticket mt-3 rounded-sm p-3">
             <div class="flex items-start gap-2">
-              <UIcon
-                name="i-lucide-gift"
-                class="mt-0.5 size-4 shrink-0 text-done"
-                aria-hidden="true"
-              />
+              <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/50 ring-1 ring-brass/30">
+                <UIcon
+                  name="i-lucide-gift"
+                  class="size-4 text-brass-deep"
+                  aria-hidden="true"
+                />
+              </span>
               <div class="min-w-0 flex-1">
-                <p class="text-xs text-ink-faint">
+                <p class="text-xs text-brass-deep/80">
                   奖励
                 </p>
-                <p class="mt-0.5 text-sm leading-6 text-ink">
+                <p class="mt-0.5 font-serif text-base leading-6 text-brass-ink">
                   {{ target.reward }}
                 </p>
               </div>
               <span
                 v-if="target.rewardClaimedAt"
-                class="shrink-0 rounded-sm bg-mist px-2 py-1 text-xs text-mist-ink"
+                class="shrink-0 rounded-sm bg-white/60 px-2 py-1 text-xs text-brass-ink ring-1 ring-brass/30"
               >
                 已领取
               </span>
             </div>
 
             <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <span v-if="target.rewardClaimedAt" class="text-xs text-ink-faint">
+              <span v-if="target.rewardClaimedAt" class="text-xs text-brass-deep/80">
                 领取于 {{ formatTimestamp(target.rewardClaimedAt) }}
               </span>
-              <span v-else-if="target.progress.achieved" class="text-xs text-done">
+              <span v-else-if="target.progress.achieved" class="text-xs font-medium text-brass-deep">
                 奖励已解锁
               </span>
-              <span v-else class="text-xs text-ink-faint">
+              <span v-else class="text-xs text-brass-deep/70">
                 达成后可领取
               </span>
 
@@ -460,6 +466,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
                   color="neutral"
                   variant="outline"
                   size="sm"
+                  class="border-brass/40 bg-white/40 text-brass-ink hover:bg-white/70"
                   :loading="claimingId === target.id"
                   @click="setRewardClaimed(target, true)"
                 />
@@ -469,6 +476,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
                   color="neutral"
                   variant="ghost"
                   size="sm"
+                  class="text-brass-deep hover:bg-white/50"
                   :loading="claimingId === target.id"
                   @click="setRewardClaimed(target, false)"
                 />

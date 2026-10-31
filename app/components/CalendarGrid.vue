@@ -56,10 +56,10 @@ const cells = computed<DayCell[]>(() => {
 })
 
 const appearanceClasses: Record<DayAppearance, string> = {
-  completed: 'bg-done text-white hover:bg-done-deep',
-  missed: 'bg-miss text-white hover:bg-miss-deep',
-  'reflected-miss': 'bg-mist text-mist-ink hover:bg-[#c6dbc5]',
-  unrecorded: 'bg-sheet text-ink ring-1 ring-inset ring-rule hover:bg-paper',
+  completed: 'bg-gradient-to-br from-done to-done-deep text-white shadow-[inset_0_1px_0_rgba(255,255,255,.16)]',
+  missed: 'bg-gradient-to-br from-miss to-miss-deep text-white shadow-[inset_0_1px_0_rgba(255,255,255,.14)]',
+  'reflected-miss': 'bg-mist text-mist-ink ring-1 ring-inset ring-[#b7cfb6]',
+  unrecorded: 'bg-paper/40 text-ink ring-1 ring-inset ring-rule/80 hover:bg-paper hover:ring-rule-strong',
 }
 
 const appearanceIcons: Record<DayAppearance, string | null> = {
@@ -72,7 +72,7 @@ const appearanceIcons: Record<DayAppearance, string | null> = {
 function cellClasses(cell: DayCell): string[] {
   if (cell.isFuture) {
     return [
-      'bg-transparent text-ink-faint/60 cursor-not-allowed',
+      'bg-transparent text-ink-faint/45 cursor-not-allowed ring-1 ring-inset ring-rule/40',
     ]
   }
 
@@ -99,7 +99,7 @@ function ariaLabel(cell: DayCell): string {
 
 <template>
   <div class="mt-4 lg:mt-5">
-    <div class="grid grid-cols-7 gap-1 text-center text-xs font-medium text-ink-faint" aria-hidden="true">
+    <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-medium tracking-[0.18em] text-ink-faint" aria-hidden="true">
       <div v-for="day in weekdays" :key="day" class="py-1">
         {{ day }}
       </div>
@@ -111,13 +111,13 @@ function ariaLabel(cell: DayCell): string {
         <button
           v-else
           type="button"
-          :class="['relative flex h-12 flex-col items-center justify-center rounded-[3px] transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done disabled:cursor-not-allowed sm:h-14 lg:h-20', cellClasses(cell)]"
+          :class="['day-cell relative flex h-12 flex-col items-center justify-center rounded-[3px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done disabled:cursor-not-allowed sm:h-14 lg:h-20', cellClasses(cell)]"
           :disabled="cell.isFuture"
           :aria-label="ariaLabel(cell)"
           :aria-current="cell.isToday ? 'date' : undefined"
           @click="emit('select', cell.date)"
         >
-          <span class="font-serif text-base leading-none sm:text-lg lg:text-2xl">{{ cell.dayNumber }}</span>
+          <span class="font-serif text-base leading-none tabular-nums sm:text-lg lg:text-2xl">{{ cell.dayNumber }}</span>
           <UIcon
             v-if="appearanceIcons[cell.appearance]"
             :name="appearanceIcons[cell.appearance]!"
@@ -127,6 +127,11 @@ function ariaLabel(cell: DayCell): string {
           <span
             v-if="cell.entry?.status === 'completed' && hasReflection(cell.entry)"
             class="absolute right-1.5 top-1.5 size-1 rounded-full bg-white/90 lg:size-1.5"
+            aria-hidden="true"
+          />
+          <span
+            v-if="cell.isToday"
+            class="absolute left-1.5 top-1.5 size-1 rounded-full bg-brass ring-1 ring-sheet/70 lg:size-1.5"
             aria-hidden="true"
           />
         </button>
@@ -153,8 +158,14 @@ function ariaLabel(cell: DayCell): string {
         未完成，有记录
       </li>
       <li class="flex items-center gap-2">
-        <span class="size-2.5 shrink-0 rounded-[2px] bg-sheet ring-1 ring-inset ring-rule-strong" aria-hidden="true" />
+        <span class="size-2.5 shrink-0 rounded-[2px] bg-paper ring-1 ring-inset ring-rule-strong" aria-hidden="true" />
         尚未记录
+      </li>
+      <li class="flex items-center gap-2">
+        <span class="relative size-2.5 shrink-0 rounded-[2px] bg-paper ring-2 ring-inset ring-done" aria-hidden="true">
+          <span class="absolute left-0.5 top-0.5 size-1 rounded-full bg-brass" />
+        </span>
+        今天
       </li>
     </ul>
   </div>

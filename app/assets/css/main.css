@@ -2,19 +2,26 @@
 @import "@nuxt/ui";
 
 @theme {
-  --color-paper: #eff1ea;
-  --color-sheet: #fafaf6;
-  --color-ink: #1f241f;
-  --color-ink-soft: #5d6358;
-  --color-ink-faint: #686e64;
-  --color-rule: #d6dbd0;
-  --color-rule-strong: #b9c0b3;
+  --color-paper: #ecefe6;
+  --color-paper-deep: #e3e7dc;
+  --color-sheet: #fbfaf5;
+  --color-ink: #1e241f;
+  --color-ink-soft: #596055;
+  --color-ink-faint: #697064;
+  --color-rule: #d4dacd;
+  --color-rule-strong: #b6bfae;
   --color-done: #1d5a41;
   --color-done-deep: #164834;
+  --color-done-soft: #dce9db;
   --color-miss: #a83a2e;
   --color-miss-deep: #8c2f25;
-  --color-mist: #d3e4d2;
+  --color-miss-soft: #f0ddd8;
+  --color-mist: #d8e7d5;
   --color-mist-ink: #1b4230;
+  --color-brass: #9a7943;
+  --color-brass-deep: #7c5f31;
+  --color-brass-soft: #f0e6d2;
+  --color-brass-ink: #5d4927;
 
   --font-sans: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", ui-serif, serif;
@@ -32,11 +39,230 @@ html {
 
 body {
   @apply bg-paper font-sans text-ink antialiased;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 70% 50% at 12% -8%, rgba(29, 90, 65, 0.10), transparent 60%),
+    radial-gradient(ellipse 55% 45% at 96% 8%, rgba(154, 121, 67, 0.09), transparent 55%),
+    linear-gradient(180deg, #eff2e9 0%, var(--color-paper) 48%, #e8ece1 100%);
+  background-size: 140px 140px, auto, auto, auto;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-attachment: fixed;
 }
 
 ::selection {
   background-color: var(--color-mist);
   color: var(--color-mist-ink);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.reveal {
+  animation: rise-in 0.48s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.reveal-late {
+  animation-delay: 90ms;
+}
+
+.reveal-later {
+  animation-delay: 160ms;
+}
+
+.modal-panel {
+  animation: rise-in 0.24s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.paper-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent 42%),
+    var(--color-sheet);
+  border: 1px solid var(--color-rule);
+  box-shadow:
+    0 1px 0 rgba(30, 36, 31, 0.05),
+    0 24px 50px -44px rgba(30, 36, 31, 0.55);
+}
+
+.paper-stack {
+  position: relative;
+  isolation: isolate;
+}
+
+.paper-stack::after {
+  content: "";
+  position: absolute;
+  inset: 10px -7px -7px 10px;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--color-rule) 80%, transparent);
+  background: color-mix(in srgb, var(--color-sheet) 72%, var(--color-paper));
+  transform: rotate(0.35deg);
+}
+
+.book-item {
+  position: relative;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.book-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.7rem;
+  bottom: 0.7rem;
+  width: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-rule-strong) 72%, transparent);
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.book-item:hover {
+  transform: translateX(3px);
+}
+
+.book-item:hover::before {
+  transform: scaleY(1.04);
+}
+
+.book-item[data-selected="true"] {
+  background:
+    linear-gradient(90deg, rgba(29, 90, 65, 0.045), transparent 70%),
+    var(--color-sheet);
+  box-shadow: 0 12px 30px -28px rgba(30, 36, 31, 0.55);
+}
+
+.book-item[data-selected="true"]::before {
+  background: var(--color-done);
+}
+
+.book-ribbon {
+  position: absolute;
+  right: 1rem;
+  top: 0;
+  width: 9px;
+  height: 18px;
+  background: var(--color-brass);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+}
+
+.day-cell {
+  transition:
+    transform 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease,
+    color 0.16s ease;
+}
+
+.day-cell:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -14px rgba(30, 36, 31, 0.5);
+}
+
+.day-cell:not(:disabled):active {
+  transform: translateY(0) scale(0.98);
+}
+
+.timeline {
+  position: relative;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0.8rem;
+  bottom: 1.2rem;
+  width: 1px;
+  background: linear-gradient(var(--color-rule-strong), var(--color-rule) 70%, transparent);
+}
+
+.timeline-item {
+  position: relative;
+  padding-left: 1.9rem;
+}
+
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--color-done);
+  background: var(--color-sheet);
+  box-shadow: 0 0 0 4px var(--color-sheet);
+}
+
+.timeline-item[data-status="missed"]::before {
+  border-color: var(--color-miss);
+}
+
+.reward-ticket {
+  position: relative;
+  border: 1px dashed color-mix(in srgb, var(--color-brass) 55%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), transparent),
+    var(--color-brass-soft);
+  color: var(--color-brass-ink);
+}
+
+.reward-ticket::before,
+.reward-ticket::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-sheet);
+  transform: translateY(-50%);
+}
+
+.reward-ticket::before {
+  left: -6px;
+}
+
+.reward-ticket::after {
+  right: -6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-late,
+  .reveal-later,
+  .modal-panel {
+    animation: none;
+  }
+
+  .book-item,
+  .book-item::before,
+  .day-cell {
+    transition: none;
+  }
+
+  .book-item:hover,
+  .day-cell:not(:disabled):hover,
+  .day-cell:not(:disabled):active {
+    transform: none;
+  }
 }
 
 .essay-markdown {

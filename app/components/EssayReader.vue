@@ -312,7 +312,7 @@ function handleOpenChange(value: boolean) {
     :transition="false"
     scrollable
     :ui="{
-      content: 'bg-sheet sm:max-w-3xl',
+      content: 'modal-panel bg-sheet sm:max-w-3xl',
       header: 'border-b border-rule',
       title: 'font-serif text-2xl text-ink',
       description: 'text-sm text-ink-soft',
@@ -324,15 +324,15 @@ function handleOpenChange(value: boolean) {
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div
-          class="flex items-center gap-0.5 rounded-md border border-rule p-0.5"
+          class="flex items-center gap-0.5 rounded-md border border-rule bg-paper/50 p-0.5"
           role="tablist"
           aria-label="阅读视图"
         >
           <button
             type="button"
             role="tab"
-            class="rounded-sm px-3 py-1.5 text-xs transition-colors motion-reduce:transition-none"
-            :class="view === 'essay' ? 'bg-paper text-ink' : 'text-ink-faint hover:text-ink'"
+            class="rounded-sm px-3 py-1.5 text-xs font-medium transition-colors motion-reduce:transition-none"
+            :class="view === 'essay' ? 'bg-sheet text-ink shadow-sm' : 'text-ink-faint hover:text-ink'"
             :aria-selected="view === 'essay'"
             @click="setView('essay')"
           >
@@ -341,13 +341,13 @@ function handleOpenChange(value: boolean) {
           <button
             type="button"
             role="tab"
-            class="rounded-sm px-3 py-1.5 text-xs transition-colors motion-reduce:transition-none"
-            :class="view === 'materials' ? 'bg-paper text-ink' : 'text-ink-faint hover:text-ink'"
+            class="rounded-sm px-3 py-1.5 text-xs font-medium transition-colors motion-reduce:transition-none"
+            :class="view === 'materials' ? 'bg-sheet text-ink shadow-sm' : 'text-ink-faint hover:text-ink'"
             :aria-selected="view === 'materials'"
             @click="setView('materials')"
           >
             材料
-            <span v-if="materials.length" class="text-ink-faint">{{ materials.length }}</span>
+            <span v-if="materials.length" class="ml-0.5 text-ink-faint">{{ materials.length }}</span>
           </button>
         </div>
 
@@ -387,7 +387,7 @@ function handleOpenChange(value: boolean) {
 
       <template v-if="view === 'essay'">
         <p class="mt-3 text-xs leading-5 text-ink-faint">
-          点日期或回应链接，可以回到那一天。
+          点日期或回应链接，回到那一天。
         </p>
 
         <div v-if="pending" class="mt-6 space-y-6" aria-busy="true" aria-label="正在读取随笔">
@@ -416,11 +416,12 @@ function handleOpenChange(value: boolean) {
           </p>
         </div>
 
-        <ol v-else class="mt-2">
+        <ol v-else class="timeline mt-2">
           <li
             v-for="item in entries"
             :key="item.entry.id"
-            class="border-t border-rule py-7 first:border-t-0 first:pt-4"
+            :data-status="item.entry.status"
+            class="timeline-item py-7 first:pt-5"
           >
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <button
@@ -430,7 +431,7 @@ function handleOpenChange(value: boolean) {
               >
                 {{ formatFullDayLabel(item.entry.entryDate) }}
               </button>
-              <span class="flex items-center gap-2 text-xs text-ink-soft">
+              <span class="inline-flex items-center gap-2 rounded-sm bg-paper/70 px-2 py-1 text-xs text-ink-soft">
                 <span
                   class="size-2 rounded-[2px]"
                   :class="statusDot[item.entry.status]"
@@ -441,43 +442,41 @@ function handleOpenChange(value: boolean) {
             </div>
 
             <div
-              class="essay-markdown mt-3"
+              class="essay-markdown mt-3 max-w-[62ch]"
               v-html="renderMarkdown(item.entry.reflection ?? '')"
             />
 
             <div
               v-if="item.outgoing.length"
-              class="mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1 text-xs text-ink-soft"
+              class="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-ink-soft"
             >
-              <span>回应</span>
-              <template v-for="(reference, index) in item.outgoing" :key="reference.entryId">
-                <button
-                  type="button"
-                  class="text-done hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
-                  @click="emit('selectDate', reference.entryDate)"
-                >
-                  {{ formatDayLabel(reference.entryDate) }}
-                </button>
-                <span v-if="index < item.outgoing.length - 1" aria-hidden="true">、</span>
-              </template>
+              <span class="text-ink-faint">回应</span>
+              <button
+                v-for="reference in item.outgoing"
+                :key="reference.entryId"
+                type="button"
+                class="rounded-sm border border-rule bg-paper/50 px-1.5 py-0.5 text-done transition-colors hover:border-done/40 hover:bg-done-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+                @click="emit('selectDate', reference.entryDate)"
+              >
+                {{ formatDayLabel(reference.entryDate) }}
+              </button>
             </div>
 
             <div
               v-if="item.incoming.length"
-              class="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-1 text-xs text-ink-soft"
+              class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-soft"
             >
-              <span>后来被</span>
-              <template v-for="(reference, index) in item.incoming" :key="reference.entryId">
-                <button
-                  type="button"
-                  class="text-done hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
-                  @click="emit('selectDate', reference.entryDate)"
-                >
-                  {{ formatDayLabel(reference.entryDate) }}
-                </button>
-                <span v-if="index < item.incoming.length - 1" aria-hidden="true">、</span>
-              </template>
-              <span>继续</span>
+              <span class="text-ink-faint">后来被</span>
+              <button
+                v-for="reference in item.incoming"
+                :key="reference.entryId"
+                type="button"
+                class="rounded-sm border border-rule bg-paper/50 px-1.5 py-0.5 text-done transition-colors hover:border-done/40 hover:bg-done-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+                @click="emit('selectDate', reference.entryDate)"
+              >
+                {{ formatDayLabel(reference.entryDate) }}
+              </button>
+              <span class="text-ink-faint">继续</span>
             </div>
           </li>
         </ol>
@@ -485,7 +484,7 @@ function handleOpenChange(value: boolean) {
 
       <template v-else>
         <p class="mt-3 text-xs leading-5 text-ink-faint">
-          导入的 Markdown 保存在这个议题下，作为写作材料，不会改动每日记录。
+          导入的 Markdown 会作为这本书的写作材料保存，不会改动每日记录。
         </p>
 
         <UAlert
@@ -500,7 +499,7 @@ function handleOpenChange(value: boolean) {
         <div v-if="activeMaterial" class="mt-5">
           <div class="flex flex-wrap items-center justify-between gap-2 border-b border-rule pb-3">
             <UButton
-              label="返回材料"
+              label="返回列表"
               icon="i-lucide-chevron-left"
               color="neutral"
               variant="ghost"
@@ -614,12 +613,15 @@ function handleOpenChange(value: boolean) {
           </div>
         </div>
 
-        <div v-else-if="!materials.length" class="py-16">
-          <p class="font-serif text-xl text-ink">
+        <div v-else-if="!materials.length" class="py-16 text-center">
+          <div class="mx-auto flex size-12 items-center justify-center rounded-full border border-rule bg-paper/60">
+            <UIcon name="i-lucide-file-text" class="size-5 text-ink-faint" aria-hidden="true" />
+          </div>
+          <p class="mt-4 font-serif text-xl text-ink">
             还没有材料
           </p>
-          <p class="mt-2 text-sm leading-6 text-ink-soft">
-            导入一份 Markdown，作为这篇随笔的写作材料。
+          <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">
+            导入一份 Markdown，作为这本书的写作材料。
           </p>
         </div>
 
@@ -627,21 +629,26 @@ function handleOpenChange(value: boolean) {
           <li
             v-for="material in materials"
             :key="material.id"
-            class="border-t border-rule py-4 first:border-t-0"
+            class="group border-t border-rule py-4 first:border-t-0"
           >
             <div class="flex items-start justify-between gap-3">
               <button
                 type="button"
-                class="min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
+                class="flex min-w-0 items-start gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
                 @click="openMaterial(material)"
               >
-                <span class="block truncate font-serif text-lg text-ink hover:text-done hover:underline hover:underline-offset-4">
-                  {{ material.title }}
+                <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-sm border border-rule bg-paper/60 text-ink-faint transition-colors group-hover:border-brass/40 group-hover:bg-brass-soft/40 group-hover:text-brass-deep">
+                  <UIcon name="i-lucide-file-text" class="size-4" aria-hidden="true" />
                 </span>
-                <span class="mt-1 block truncate text-xs text-ink-faint">
-                  {{ material.sourceName || '未记录文件名' }}
-                  · {{ formatCount(material.characterCount) }}
-                  · 导入于 {{ formatTimestamp(material.createdAt) }}
+                <span class="min-w-0">
+                  <span class="block truncate font-serif text-lg text-ink transition-colors group-hover:text-done">
+                    {{ material.title }}
+                  </span>
+                  <span class="mt-1 block truncate text-xs text-ink-faint">
+                    {{ material.sourceName || '未记录文件名' }}
+                    · {{ formatCount(material.characterCount) }}
+                    · 导入于 {{ formatTimestamp(material.createdAt) }}
+                  </span>
                 </span>
               </button>
               <UButton
