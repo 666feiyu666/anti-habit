@@ -89,7 +89,7 @@ async function getEssays(goalId: string): Promise<EssayEntry[]> {
 
 async function createGoalTarget(
   goalId: string,
-  payload: { type: 'streak' | 'cumulative', count: number },
+  payload: { type: 'streak' | 'cumulative', count: number, reward?: string | null },
 ): Promise<GoalTarget> {
   const { response, body } = await request(`/api/goals/${goalId}/targets`, {
     method: 'POST',
@@ -103,6 +103,22 @@ async function listGoalTargets(goalId: string): Promise<GoalTarget[]> {
   const { response, body } = await request(`/api/goals/${goalId}/targets`)
   expect(response.status).toBe(200)
   return body.targets as GoalTarget[]
+}
+
+async function claimGoalTargetReward(
+  goalId: string,
+  targetId: string,
+  claimed: boolean,
+): Promise<GoalTarget> {
+  const { response, body } = await request(
+    `/api/goals/${goalId}/targets/${targetId}/reward`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ claimed }),
+    },
+  )
+  expect(response.status).toBe(200)
+  return body.target as GoalTarget
 }
 
 async function createMaterial(
@@ -794,5 +810,140 @@ describe('goals API', () => {
     const unknownGoal = await request('/api/goals/00000000-0000-4000-8000-000000000000/targets')
     expect(unknownGoal.response.status).toBe(404)
     expect(unknownGoal.body.data.code).toBe('GOAL_NOT_FOUND')
+  })
+
+  it('stores a reward and lets an achieved target claim it', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+    await putEntry(goal.id, today, { status: 'completed', reflection: null })
+
+    const target = await createGoalTarget(goal.id, {
+      type: 'streak',
+      count: 1,
+      reward: '买一本喜欢的书',
+    })
+    expect(target.reward).toBe('买一本喜欢的书')
+    expect(target.rewardClaimedAt).toBeNull()
+    expect(target.progress.achieved).toBe(true)
+
+    const claimed = await claimGoalTargetReward(goal.id, target.id, true)
+    expect(claimed.rewardClaimedAt).toBeTypeOf('number')
+    expect(claimed.reward).toBe('买一本喜欢的书')
+
+    const [listed] = await listGoalTargets(goal.id)
+    expect(listed?.rewardClaimedAt).toBe(claimed.rewardClaimedAt)
+
+    const revoked = await claimGoalTargetReward(goal.id, target.id, false)
+    expect(revoked.rewardClaimedAt).toBeNull()
+  })
+
+  it('rejects claiming before achievement or without a reward', async () => {
+    const goal = await createGoal(uniqueTitle('Read Before Bed'))
+
+    const noReward = await createGoalTarget(goal.id, { type: 'streak', count: 1 })
+    const missingReward = await request(
+      `/api/goals/${goal.id}/targets/${noReward.id}/reward`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ claimed: true }),
+      },
+    )
+    expect(missingReward.response.status).toBe(400)
+    expect(missingReward.body.data.code).toBe('TARGET_REWARD_MISSING')
+
+    const withReward = await createGoalTarget(goal.id, {
+      type: 'streak',
+      count: 2,
+      reward: '一顿大餐',
+    })
+    await putEntry(goal.id, today, { status: 'completed', reflection: null })
+
+    const notAchieved = await request(
+      `/api/goals/${goal.id}/targets/${withReward.id}/reward`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ claimed: true }),
+      },
+    )
+    expect(notAchieved.response.status).toBe(400)
+    expect(notAchieved.body.data.code).toBe('TARGET_NOT_ACHIEVED')
+    expect(await listGoalTargets(goal.id)).toHaveLength(2)
+  })
+
+  it('resets a claimed reward when the target or reward changes', async () => {
+    const goal = await createGoal(uniqueTitle('No Phone After 11 PM'))
+    await putEntry(goal.id, today, { status: 'completed', reflection: null })
+
+    const target = await createGoalTarget(goal.id, {
+      type: 'streak',
+      count: 1,
+      reward: '看一场电影',
+    })
+    const claimed = await claimGoalTargetReward(goal.id, target.id, true)
+    expect(claimed.rewardClaimedAt).not.toBeNull()
+
+    const unchanged = await request(`/api/goals/${goal.id}/targets/${target.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        type: 'streak',
+        count: 1,
+        reward: '看一场电影',
+      }),
+    })
+    expect(unchanged.response.status).toBe(200)
+    expect(unchanged.body.target.rewardClaimedAt).toBe(claimed.rewardClaimedAt)
+
+    const rewardChanged = await request(`/api/goals/${goal.id}/targets/${target.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        type: 'streak',
+        count: 1,
+        reward: '看两场电影',
+      }),
+    })
+    expect(rewardChanged.response.status).toBe(200)
+    expect(rewardChanged.body.target.rewardClaimedAt).toBeNull()
+
+    await claimGoalTargetReward(goal.id, target.id, true)
+
+    const targetChanged = await request(`/api/goals/${goal.id}/targets/${target.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        type: 'streak',
+        count: 5,
+        reward: '看两场电影',
+      }),
+    })
+    expect(targetChanged.response.status).toBe(200)
+    expect(targetChanged.body.target.rewardClaimedAt).toBeNull()
+  })
+
+  it('validates reward length and claim payloads', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+
+    const overlong = await request(`/api/goals/${goal.id}/targets`, {
+      method: 'POST',
+      body: JSON.stringify({
+        type: 'streak',
+        count: 1,
+        reward: '奖'.repeat(201),
+      }),
+    })
+    expect(overlong.response.status).toBe(400)
+    expect(overlong.body.data.message).toContain('奖励')
+
+    const target = await createGoalTarget(goal.id, {
+      type: 'streak',
+      count: 1,
+      reward: '奖励',
+    })
+    const invalidClaim = await request(
+      `/api/goals/${goal.id}/targets/${target.id}/reward`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ claimed: 'yes' }),
+      },
+    )
+    expect(invalidClaim.response.status).toBe(400)
+    expect(invalidClaim.body.data.code).toBe('INVALID_INPUT')
   })
 })

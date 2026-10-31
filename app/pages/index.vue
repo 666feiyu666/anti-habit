@@ -270,8 +270,8 @@ onMounted(() => {
         class="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12"
       >
         <section aria-labelledby="calendar-heading">
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
               <h1 class="truncate font-serif text-3xl tracking-tight text-ink sm:text-4xl">
                 {{ selectedGoal.essayTitle || '随笔' }}
               </h1>
@@ -293,12 +293,12 @@ onMounted(() => {
                 {{ dayStatusLabel[currentAppearance] }}
               </span>
               <UButton
+                label="目标进度"
                 icon="i-lucide-list-checks"
                 color="neutral"
-                variant="ghost"
-                size="sm"
+                variant="soft"
+                class="shrink-0"
                 aria-label="目标完成情况"
-                title="目标完成情况"
                 @click="targetsOpen = true"
               />
             </div>

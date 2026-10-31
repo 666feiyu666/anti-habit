@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const db = getDatabase()
   const goal = await requireActiveGoal(db, id)
 
-  const { type, count } = await parseBody(event, createGoalTargetSchema)
+  const { type, count, reward } = await parseBody(event, createGoalTargetSchema)
   const now = Math.floor(Date.now() / 1000)
 
   const [row] = await db
@@ -21,6 +21,8 @@ export default defineEventHandler(async (event) => {
       goalId: goal.id,
       type,
       count,
+      reward: reward ?? null,
+      rewardClaimedAt: null,
       createdAt: now,
       updatedAt: now,
     })

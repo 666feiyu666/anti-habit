@@ -41,6 +41,8 @@ function attachProgress(
     goalId: row.goalId,
     type: row.type,
     count: row.count,
+    reward: row.reward,
+    rewardClaimedAt: row.rewardClaimedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     progress: computeGoalTargetProgress({

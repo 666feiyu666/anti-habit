@@ -43,6 +43,8 @@ export interface GoalTarget {
   goalId: string
   type: GoalTargetType
   count: number
+  reward: string | null
+  rewardClaimedAt: number | null
   createdAt: number
   updatedAt: number
   progress: GoalTargetProgress

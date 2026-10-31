@@ -12,14 +12,21 @@ export default defineEventHandler(async (event) => {
   const goal = await requireActiveGoal(db, id)
 
   const targetId = getRouterParam(event, 'targetId')
-  requireGoalTarget(db, goal.id, targetId)
+  const current = requireGoalTarget(db, goal.id, targetId)
 
-  const { type, count } = await parseBody(event, updateGoalTargetSchema)
+  const { type, count, reward } = await parseBody(event, updateGoalTargetSchema)
+  const nextReward = reward === undefined ? current.reward : reward
+  const changed = type !== current.type
+    || count !== current.count
+    || nextReward !== current.reward
+
   await db
     .update(goalTargets)
     .set({
       type,
       count,
+      reward: nextReward,
+      rewardClaimedAt: changed ? null : current.rewardClaimedAt,
       updatedAt: Math.floor(Date.now() / 1000),
     })
     .where(eq(goalTargets.id, targetId!))

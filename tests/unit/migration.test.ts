@@ -47,7 +47,13 @@ describe('database migrations', () => {
 
       await copyMigrations(
         migrationsFolder,
-        ['0000_init', '0001_essays', '0002_special_saracen', '0003_smart_wolfsbane'],
+        [
+          '0000_init',
+          '0001_essays',
+          '0002_special_saracen',
+          '0003_smart_wolfsbane',
+          '0004_amusing_rick_jones',
+        ],
       )
       migrate(drizzle(sqlite), { migrationsFolder })
 
@@ -116,20 +122,27 @@ describe('database migrations', () => {
       })
 
       sqlite.exec(`
-        insert into goal_targets (id, goal_id, type, count, created_at, updated_at)
-        values ('target-1', 'goal-1', 'streak', 30, 100, 100);
+        insert into goal_targets (
+          id, goal_id, type, count, reward, reward_claimed_at, created_at, updated_at
+        ) values (
+          'target-1', 'goal-1', 'streak', 30, '一顿大餐', 100, 100, 100
+        );
       `)
       const target = sqlite
-        .prepare('select id, type, count from goal_targets where id = ?')
+        .prepare('select id, type, count, reward, reward_claimed_at from goal_targets where id = ?')
         .get('target-1') as {
           id: string
           type: string
           count: number
+          reward: string | null
+          reward_claimed_at: number | null
         }
       expect(target).toEqual({
         id: 'target-1',
         type: 'streak',
         count: 30,
+        reward: '一顿大餐',
+        reward_claimed_at: 100,
       })
     } finally {
       sqlite.close()

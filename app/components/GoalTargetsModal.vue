@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { GoalSummary, GoalTarget, GoalTargetType } from '#shared/types'
-import { GOAL_TARGET_COUNT_MAX, GOAL_TARGET_COUNT_MIN } from '#shared/schemas'
+import {
+  GOAL_TARGET_COUNT_MAX,
+  GOAL_TARGET_COUNT_MIN,
+  GOAL_TARGET_REWARD_MAX_LENGTH,
+} from '#shared/schemas'
 
 const props = defineProps<{
   open: boolean
@@ -19,8 +23,10 @@ const formOpen = ref(false)
 const editingId = ref<string | null>(null)
 const formType = ref<GoalTargetType>('streak')
 const formCount = ref(30)
+const formReward = ref('')
 const saving = ref(false)
 const deletingId = ref<string | null>(null)
+const claimingId = ref<string | null>(null)
 
 const formHint = computed(() => formType.value === 'streak'
   ? '按历史最长连续天数判定达成；今天还没记录时，当前连续不会立刻清零。'
@@ -34,6 +40,10 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
 
 function formatDate(date: string): string {
   return dateFormatter.format(new Date(`${date}T00:00:00`))
+}
+
+function formatTimestamp(seconds: number): string {
+  return dateFormatter.format(new Date(seconds * 1000))
 }
 
 function typeLabel(type: GoalTargetType): string {
@@ -94,6 +104,7 @@ function openCreate() {
   editingId.value = null
   formType.value = 'streak'
   formCount.value = 30
+  formReward.value = ''
   error.value = ''
   formOpen.value = true
 }
@@ -102,6 +113,7 @@ function openEdit(target: GoalTarget) {
   editingId.value = target.id
   formType.value = target.type
   formCount.value = target.count
+  formReward.value = target.reward ?? ''
   error.value = ''
   formOpen.value = true
 }
@@ -127,7 +139,11 @@ async function saveTarget() {
   error.value = ''
 
   try {
-    const body = { type: formType.value, count }
+    const body = {
+      type: formType.value,
+      count,
+      reward: formReward.value.trim() || null,
+    }
     if (editingId.value) {
       await $fetch(`/api/goals/${goal.id}/targets/${editingId.value}`, {
         method: 'PUT',
@@ -172,6 +188,34 @@ async function deleteTarget(target: GoalTarget) {
     error.value = getApiErrorMessage(caught)
   } finally {
     deletingId.value = null
+  }
+}
+
+async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
+  const goal = props.goal
+  if (!goal) return
+
+  claimingId.value = target.id
+  error.value = ''
+
+  try {
+    const result = await $fetch<{ target: GoalTarget }>(
+      `/api/goals/${goal.id}/targets/${target.id}/reward`,
+      {
+        method: 'PUT',
+        body: { claimed },
+      },
+    )
+    const index = targets.value.findIndex(item => item.id === target.id)
+    if (index >= 0) targets.value.splice(index, 1, result.target)
+    toast.add({
+      title: claimed ? '奖励已领取' : '已撤销领取',
+      color: 'neutral',
+    })
+  } catch (caught) {
+    error.value = getApiErrorMessage(caught)
+  } finally {
+    claimingId.value = null
   }
 }
 </script>
@@ -254,6 +298,30 @@ async function deleteTarget(target: GoalTarget) {
             />
             <span class="text-sm text-ink-soft">天</span>
           </div>
+        </div>
+
+        <div class="mt-3">
+          <div class="flex items-baseline justify-between gap-3">
+            <label for="goal-target-reward" class="text-xs font-medium text-ink-soft">
+              奖励
+              <span class="font-normal text-ink-faint">选填</span>
+            </label>
+            <span class="text-xs tabular-nums text-ink-faint">
+              {{ formReward.length }}/{{ GOAL_TARGET_REWARD_MAX_LENGTH }}
+            </span>
+          </div>
+          <p class="mt-1 text-xs leading-5 text-ink-faint">
+            达成后可以标记已领取。
+          </p>
+          <UTextarea
+            id="goal-target-reward"
+            v-model="formReward"
+            :maxlength="GOAL_TARGET_REWARD_MAX_LENGTH"
+            :rows="2"
+            :disabled="saving"
+            class="mt-2 w-full"
+            placeholder="例如：买一本喜欢的书"
+          />
         </div>
 
         <p class="mt-3 text-xs leading-5 text-ink-faint">
@@ -349,6 +417,64 @@ async function deleteTarget(target: GoalTarget) {
               · 达成于 {{ formatDate(target.progress.achievedOn) }}
             </span>
           </p>
+
+          <div v-if="target.reward" class="mt-3 rounded-sm border border-rule bg-paper/60 p-3">
+            <div class="flex items-start gap-2">
+              <UIcon
+                name="i-lucide-gift"
+                class="mt-0.5 size-4 shrink-0 text-done"
+                aria-hidden="true"
+              />
+              <div class="min-w-0 flex-1">
+                <p class="text-xs text-ink-faint">
+                  奖励
+                </p>
+                <p class="mt-0.5 text-sm leading-6 text-ink">
+                  {{ target.reward }}
+                </p>
+              </div>
+              <span
+                v-if="target.rewardClaimedAt"
+                class="shrink-0 rounded-sm bg-mist px-2 py-1 text-xs text-mist-ink"
+              >
+                已领取
+              </span>
+            </div>
+
+            <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <span v-if="target.rewardClaimedAt" class="text-xs text-ink-faint">
+                领取于 {{ formatTimestamp(target.rewardClaimedAt) }}
+              </span>
+              <span v-else-if="target.progress.achieved" class="text-xs text-done">
+                奖励已解锁
+              </span>
+              <span v-else class="text-xs text-ink-faint">
+                达成后可领取
+              </span>
+
+              <div class="flex items-center gap-1">
+                <UButton
+                  v-if="target.progress.achieved && !target.rewardClaimedAt"
+                  label="标记已领取"
+                  icon="i-lucide-gift"
+                  color="neutral"
+                  variant="outline"
+                  size="sm"
+                  :loading="claimingId === target.id"
+                  @click="setRewardClaimed(target, true)"
+                />
+                <UButton
+                  v-if="target.rewardClaimedAt"
+                  label="撤销领取"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :loading="claimingId === target.id"
+                  @click="setRewardClaimed(target, false)"
+                />
+              </div>
+            </div>
+          </div>
 
           <div class="mt-3 flex justify-end gap-1">
             <UButton

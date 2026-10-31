@@ -105,6 +105,7 @@ export function materialTitleFromSourceName(sourceName: string | null | undefine
 
 export const GOAL_TARGET_COUNT_MIN = 1
 export const GOAL_TARGET_COUNT_MAX = 3650
+export const GOAL_TARGET_REWARD_MAX_LENGTH = 200
 
 export const goalTargetTypeSchema = z.enum(
   ['streak', 'cumulative'],
@@ -117,9 +118,25 @@ export const goalTargetCountSchema = z
   .min(GOAL_TARGET_COUNT_MIN, `目标天数至少为 ${GOAL_TARGET_COUNT_MIN} 天`)
   .max(GOAL_TARGET_COUNT_MAX, `目标天数不能超过 ${GOAL_TARGET_COUNT_MAX} 天`)
 
+export const goalTargetRewardSchema = z
+  .string()
+  .trim()
+  .max(
+    GOAL_TARGET_REWARD_MAX_LENGTH,
+    `奖励不能超过 ${GOAL_TARGET_REWARD_MAX_LENGTH} 个字符`,
+  )
+  .nullable()
+  .optional()
+  .transform(value => value === undefined ? undefined : (value ? value : null))
+
 export const createGoalTargetSchema = z.object({
   type: goalTargetTypeSchema,
   count: goalTargetCountSchema,
+  reward: goalTargetRewardSchema,
 })
 
 export const updateGoalTargetSchema = createGoalTargetSchema
+
+export const updateGoalTargetRewardClaimSchema = z.object({
+  claimed: z.boolean(),
+})

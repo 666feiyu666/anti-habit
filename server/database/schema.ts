@@ -19,6 +19,8 @@ export const goalTargets = sqliteTable(
       .references(() => goals.id),
     type: text('type', { enum: ['streak', 'cumulative'] }).notNull(),
     count: integer('count').notNull(),
+    reward: text('reward'),
+    rewardClaimedAt: integer('reward_claimed_at'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },
