@@ -102,3 +102,24 @@ export function materialTitleFromSourceName(sourceName: string | null | undefine
   const withoutExtension = withoutPath.replace(/\.(?:md|markdown|txt)$/i, '').trim()
   return withoutExtension || '未命名材料'
 }
+
+export const GOAL_TARGET_COUNT_MIN = 1
+export const GOAL_TARGET_COUNT_MAX = 3650
+
+export const goalTargetTypeSchema = z.enum(
+  ['streak', 'cumulative'],
+  '请选择连续或累积',
+)
+
+export const goalTargetCountSchema = z
+  .number()
+  .int('天数必须是整数')
+  .min(GOAL_TARGET_COUNT_MIN, `目标天数至少为 ${GOAL_TARGET_COUNT_MIN} 天`)
+  .max(GOAL_TARGET_COUNT_MAX, `目标天数不能超过 ${GOAL_TARGET_COUNT_MAX} 天`)
+
+export const createGoalTargetSchema = z.object({
+  type: goalTargetTypeSchema,
+  count: goalTargetCountSchema,
+})
+
+export const updateGoalTargetSchema = createGoalTargetSchema

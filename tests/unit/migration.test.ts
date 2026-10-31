@@ -45,7 +45,10 @@ describe('database migrations', () => {
         );
       `)
 
-      await copyMigrations(migrationsFolder, ['0000_init', '0001_essays', '0002_special_saracen'])
+      await copyMigrations(
+        migrationsFolder,
+        ['0000_init', '0001_essays', '0002_special_saracen', '0003_smart_wolfsbane'],
+      )
       migrate(drizzle(sqlite), { migrationsFolder })
 
       const goal = sqlite
@@ -91,6 +94,7 @@ describe('database migrations', () => {
         .all() as Array<{ name: string }>
       expect(tables.map(table => table.name)).toContain('entry_links')
       expect(tables.map(table => table.name)).toContain('goal_materials')
+      expect(tables.map(table => table.name)).toContain('goal_targets')
 
       sqlite.exec(`
         insert into goal_materials (id, goal_id, title, content, source_name, created_at, updated_at)
@@ -109,6 +113,23 @@ describe('database migrations', () => {
         title: '旧材料',
         content: '材料正文',
         source_name: 'old.md',
+      })
+
+      sqlite.exec(`
+        insert into goal_targets (id, goal_id, type, count, created_at, updated_at)
+        values ('target-1', 'goal-1', 'streak', 30, 100, 100);
+      `)
+      const target = sqlite
+        .prepare('select id, type, count from goal_targets where id = ?')
+        .get('target-1') as {
+          id: string
+          type: string
+          count: number
+        }
+      expect(target).toEqual({
+        id: 'target-1',
+        type: 'streak',
+        count: 30,
       })
     } finally {
       sqlite.close()

@@ -84,6 +84,7 @@ const isCreateOpen = ref(false)
 const editTarget = ref<GoalSummary | null>(null)
 const deleteTarget = ref<GoalSummary | null>(null)
 const editorOpen = ref(false)
+const targetsOpen = ref(false)
 
 const readerOpen = ref(false)
 const readerGoal = ref<GoalSummary | null>(null)
@@ -279,17 +280,28 @@ onMounted(() => {
               </p>
             </div>
 
-            <span
-              class="flex shrink-0 items-center gap-2 pt-2 text-xs"
-              :class="currentAppearance === 'unrecorded' ? 'text-ink-faint' : 'text-ink-soft'"
-            >
+            <div class="flex shrink-0 items-center gap-2 pt-1">
               <span
-                class="size-2 rounded-[2px]"
-                :class="dayStatusDot[currentAppearance]"
-                aria-hidden="true"
+                class="flex items-center gap-2 text-xs"
+                :class="currentAppearance === 'unrecorded' ? 'text-ink-faint' : 'text-ink-soft'"
+              >
+                <span
+                  class="size-2 rounded-[2px]"
+                  :class="dayStatusDot[currentAppearance]"
+                  aria-hidden="true"
+                />
+                {{ dayStatusLabel[currentAppearance] }}
+              </span>
+              <UButton
+                icon="i-lucide-list-checks"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="目标完成情况"
+                title="目标完成情况"
+                @click="targetsOpen = true"
               />
-              {{ dayStatusLabel[currentAppearance] }}
-            </span>
+            </div>
           </div>
 
           <div
@@ -416,6 +428,10 @@ onMounted(() => {
       v-model:open="deleteOpen"
       :goal="deleteTarget"
       @deleted="handleGoalDeleted"
+    />
+    <GoalTargetsModal
+      v-model:open="targetsOpen"
+      :goal="selectedGoal"
     />
     <DayEditorModal
       v-if="selectedGoal"

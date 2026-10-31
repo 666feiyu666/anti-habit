@@ -10,6 +10,25 @@ export const goals = sqliteTable('goals', {
   deletedAt: integer('deleted_at'),
 })
 
+export const goalTargets = sqliteTable(
+  'goal_targets',
+  {
+    id: text('id').primaryKey(),
+    goalId: text('goal_id')
+      .notNull()
+      .references(() => goals.id),
+    type: text('type', { enum: ['streak', 'cumulative'] }).notNull(),
+    count: integer('count').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  table => [
+    index('goal_targets_goal_id_idx').on(table.goalId),
+    check('goal_targets_type_check', sql`${table.type} in ('streak', 'cumulative')`),
+    check('goal_targets_count_check', sql`${table.count} > 0`),
+  ],
+)
+
 export const dailyEntries = sqliteTable(
   'daily_entries',
   {
@@ -76,3 +95,5 @@ export type EntryLinkRow = typeof entryLinks.$inferSelect
 export type NewEntryLinkRow = typeof entryLinks.$inferInsert
 export type GoalMaterialRow = typeof goalMaterials.$inferSelect
 export type NewGoalMaterialRow = typeof goalMaterials.$inferInsert
+export type GoalTargetRow = typeof goalTargets.$inferSelect
+export type NewGoalTargetRow = typeof goalTargets.$inferInsert

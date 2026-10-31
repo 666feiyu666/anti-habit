@@ -27,6 +27,27 @@ export interface GoalSummary extends Goal {
   todayEntry: DailyEntry | null
 }
 
+export type GoalTargetType = 'streak' | 'cumulative'
+
+export interface GoalTargetProgress {
+  startDate: string
+  completedDays: number
+  currentStreak: number
+  longestStreak: number
+  achieved: boolean
+  achievedOn: string | null
+}
+
+export interface GoalTarget {
+  id: string
+  goalId: string
+  type: GoalTargetType
+  count: number
+  createdAt: number
+  updatedAt: number
+  progress: GoalTargetProgress
+}
+
 export interface EssayReference {
   entryId: string
   entryDate: string

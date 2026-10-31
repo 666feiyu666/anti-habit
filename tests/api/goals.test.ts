@@ -12,6 +12,7 @@ import type {
   GoalMaterial,
   GoalMaterialSummary,
   GoalSummary,
+  GoalTarget,
 } from '../../shared/types'
 import { todayDateOnly } from '../../shared/utils/date'
 
@@ -84,6 +85,24 @@ async function getEssays(goalId: string): Promise<EssayEntry[]> {
   const { response, body } = await request(`/api/goals/${goalId}/essays`)
   expect(response.status).toBe(200)
   return body.entries as EssayEntry[]
+}
+
+async function createGoalTarget(
+  goalId: string,
+  payload: { type: 'streak' | 'cumulative', count: number },
+): Promise<GoalTarget> {
+  const { response, body } = await request(`/api/goals/${goalId}/targets`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  expect(response.status).toBe(201)
+  return body.target as GoalTarget
+}
+
+async function listGoalTargets(goalId: string): Promise<GoalTarget[]> {
+  const { response, body } = await request(`/api/goals/${goalId}/targets`)
+  expect(response.status).toBe(200)
+  return body.targets as GoalTarget[]
 }
 
 async function createMaterial(
@@ -670,6 +689,109 @@ describe('goals API', () => {
     expect(emptyTitle.body.data.message).toBe('材料标题不能为空')
 
     const unknownGoal = await request('/api/goals/00000000-0000-4000-8000-000000000000/materials')
+    expect(unknownGoal.response.status).toBe(404)
+    expect(unknownGoal.body.data.code).toBe('GOAL_NOT_FOUND')
+  })
+
+  it('creates multiple goal targets and returns their progress', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+    await putEntry(goal.id, today, { status: 'completed', reflection: null })
+
+    const streak = await createGoalTarget(goal.id, { type: 'streak', count: 1 })
+    expect(streak.goalId).toBe(goal.id)
+    expect(streak.type).toBe('streak')
+    expect(streak.count).toBe(1)
+    expect(streak.progress).toEqual({
+      startDate: today,
+      completedDays: 1,
+      currentStreak: 1,
+      longestStreak: 1,
+      achieved: true,
+      achievedOn: today,
+    })
+
+    const cumulative = await createGoalTarget(goal.id, { type: 'cumulative', count: 5 })
+    expect(cumulative.progress).toMatchObject({
+      completedDays: 1,
+      currentStreak: 1,
+      longestStreak: 1,
+      achieved: false,
+      achievedOn: null,
+    })
+
+    const targets = await listGoalTargets(goal.id)
+    expect(targets).toHaveLength(2)
+    expect(targets.map(target => target.id).sort()).toEqual(
+      [streak.id, cumulative.id].sort(),
+    )
+  })
+
+  it('updates and deletes a goal target', async () => {
+    const goal = await createGoal(uniqueTitle('Read Before Bed'))
+    const target = await createGoalTarget(goal.id, { type: 'streak', count: 30 })
+
+    const updated = await request(`/api/goals/${goal.id}/targets/${target.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ type: 'cumulative', count: 100 }),
+    })
+    expect(updated.response.status).toBe(200)
+    expect(updated.body.target).toMatchObject({
+      id: target.id,
+      goalId: goal.id,
+      type: 'cumulative',
+      count: 100,
+    })
+
+    const deleted = await request(`/api/goals/${goal.id}/targets/${target.id}`, {
+      method: 'DELETE',
+    })
+    expect(deleted.response.status).toBe(200)
+    expect(deleted.body.deleted).toBe(true)
+    expect(await listGoalTargets(goal.id)).toEqual([])
+
+    const missing = await request(`/api/goals/${goal.id}/targets/${target.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ type: 'streak', count: 10 }),
+    })
+    expect(missing.response.status).toBe(404)
+    expect(missing.body.data.code).toBe('GOAL_TARGET_NOT_FOUND')
+  })
+
+  it('rejects invalid goal target settings and cross-goal access', async () => {
+    const goal = await createGoal(uniqueTitle('Walk 20 Minutes'))
+    const other = await createGoal(uniqueTitle('Read Before Bed'))
+
+    const zero = await request(`/api/goals/${goal.id}/targets`, {
+      method: 'POST',
+      body: JSON.stringify({ type: 'streak', count: 0 }),
+    })
+    expect(zero.response.status).toBe(400)
+    expect(zero.body.data.code).toBe('INVALID_INPUT')
+    expect(zero.body.data.message).toContain('至少')
+
+    const fractional = await request(`/api/goals/${goal.id}/targets`, {
+      method: 'POST',
+      body: JSON.stringify({ type: 'cumulative', count: 1.5 }),
+    })
+    expect(fractional.response.status).toBe(400)
+    expect(fractional.body.data.code).toBe('INVALID_INPUT')
+
+    const invalidType = await request(`/api/goals/${goal.id}/targets`, {
+      method: 'POST',
+      body: JSON.stringify({ type: 'weekly', count: 7 }),
+    })
+    expect(invalidType.response.status).toBe(400)
+    expect(invalidType.body.data.code).toBe('INVALID_INPUT')
+
+    const target = await createGoalTarget(goal.id, { type: 'streak', count: 7 })
+    const crossGoal = await request(`/api/goals/${other.id}/targets/${target.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ type: 'streak', count: 30 }),
+    })
+    expect(crossGoal.response.status).toBe(404)
+    expect(crossGoal.body.data.code).toBe('GOAL_TARGET_NOT_FOUND')
+
+    const unknownGoal = await request('/api/goals/00000000-0000-4000-8000-000000000000/targets')
     expect(unknownGoal.response.status).toBe(404)
     expect(unknownGoal.body.data.code).toBe('GOAL_NOT_FOUND')
   })
