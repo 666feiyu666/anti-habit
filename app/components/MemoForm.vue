@@ -211,7 +211,7 @@ onMounted(() => {
           现在想到什么？
         </h2>
         <p class="mt-1 text-xs leading-5 text-ink-soft">
-          无标题也可以写。习惯关联是选填，保存笔记不会改变今天的完成状态。
+          无标题也可以写。习惯关联是选填。
         </p>
       </div>
       <span class="text-xs tabular-nums" :class="remaining < 500 ? 'text-miss' : 'text-ink-faint'">
@@ -302,7 +302,7 @@ onMounted(() => {
     />
 
     <p v-if="hasPreservedGoals" class="text-xs leading-5 text-ink-faint">
-      已删除习惯的关联会保留在这则笔记上，方便日后核对。
+      已删除习惯的关联会留在这则笔记上，方便日后核对。
     </p>
 
     <p v-if="error" class="text-sm text-miss" role="alert">

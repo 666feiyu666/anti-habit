@@ -30,7 +30,7 @@ function handleSaved(memo: Memo) {
   <UModal
     v-model:open="open"
     :title="title"
-    description="正文和关联会一起保存；任何一处不合法，整次修改都不会生效。"
+    description="正文和关联一起保存；只要有一处无效，整次修改都不会生效。"
     :transition="false"
     scrollable
     :ui="{ content: 'modal-panel bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"

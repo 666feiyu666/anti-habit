@@ -368,7 +368,7 @@ describe('goals API', () => {
       body: JSON.stringify({ title: renamedTitle, essayTitle: '论'.repeat(121) }),
     })
     expect(overlong.response.status).toBe(400)
-    expect(overlong.body.data.message).toContain('Essay 题目')
+    expect(overlong.body.data.message).toContain('随笔题目')
   })
 
   it('links a later entry to an earlier one and returns both directions', async () => {

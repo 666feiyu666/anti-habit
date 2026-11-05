@@ -17,7 +17,7 @@ export const goalTitleSchema = z
 export const essayTitleSchema = z
   .string()
   .trim()
-  .max(ESSAY_TITLE_MAX_LENGTH, `Essay 题目不能超过 ${ESSAY_TITLE_MAX_LENGTH} 个字符`)
+  .max(ESSAY_TITLE_MAX_LENGTH, `随笔题目不能超过 ${ESSAY_TITLE_MAX_LENGTH} 个字符`)
   .nullable()
   .optional()
   .transform(value => value === undefined ? undefined : (value ? value : null))

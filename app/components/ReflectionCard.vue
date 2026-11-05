@@ -48,7 +48,7 @@ const editTarget = computed(() => props.item.goalDeletedAt
 
     <footer class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-rule/70 pt-2.5">
       <p class="text-xs leading-5 text-ink-faint">
-        这段正文只有一个写入口：原来那一天的编辑器。
+        这段正文只在原来那一天的编辑器里修改。
       </p>
       <NuxtLink
         v-if="editTarget"
@@ -56,7 +56,7 @@ const editTarget = computed(() => props.item.goalDeletedAt
         class="inline-flex items-center gap-1 text-xs text-done underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
       >
         <UIcon name="i-lucide-arrow-left-right" class="size-3.5" aria-hidden="true" />
-        回到这一天编辑
+        回到这一天
       </NuxtLink>
       <span v-else class="text-xs text-ink-faint">
         原习惯已删除，这段反思仍保留。

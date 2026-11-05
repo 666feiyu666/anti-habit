@@ -8,7 +8,7 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'zh-CN' },
       title: 'Anti-Habit',
       meta: [
-        { name: 'description', content: '一个按天记录目标的极简工具。' },
+        { name: 'description', content: '一个按天记录习惯与笔记的极简工具。' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       ],
     },

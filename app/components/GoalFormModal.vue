@@ -43,7 +43,7 @@ async function submit() {
     return
   }
   if (normalizedEssayTitle.value.length > ESSAY_TITLE_MAX_LENGTH) {
-    error.value = `Essay 题目不能超过 ${ESSAY_TITLE_MAX_LENGTH} 个字符`
+    error.value = `随笔题目不能超过 ${ESSAY_TITLE_MAX_LENGTH} 个字符`
     return
   }
 
@@ -113,7 +113,7 @@ async function submit() {
         <div>
           <div class="flex items-center justify-between gap-3">
             <label for="essay-title" class="text-sm font-medium text-ink">
-              Essay 题目
+              随笔题目
               <span class="font-normal text-ink-faint">选填</span>
             </label>
             <span class="text-xs tabular-nums text-ink-faint">

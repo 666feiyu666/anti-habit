@@ -329,7 +329,7 @@ onMounted(() => {
         v-if="pending && !goals.length"
         class="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12"
         aria-busy="true"
-        aria-label="正在读取工作台"
+        aria-label="正在读取习惯页"
       >
         <div class="h-96 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
         <div class="h-64 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
@@ -401,7 +401,7 @@ onMounted(() => {
                 </div>
 
                 <div class="flex items-center gap-2">
-                  <span v-if="entriesPending" class="text-xs text-ink-faint">读取中…</span>
+                  <span v-if="entriesPending" class="text-xs text-ink-faint">正在读取…</span>
                   <UButton
                     v-if="!isCurrentMonth"
                     label="回到本月"
@@ -447,7 +447,7 @@ onMounted(() => {
             </div>
 
             <p class="mt-4 max-w-xl text-pretty text-xs leading-5 text-ink-faint">
-              点一天，写下完成或未完成，也可以继续以前的想法；也可以从这次打卡直接写一则笔记。
+              点一天，记下完成或未完成，也可以继续以前的想法；还能从这次打卡直接写一则笔记。
             </p>
           </section>
 
@@ -484,7 +484,7 @@ onMounted(() => {
               v-else-if="!relatedMemos.length && !relatedReflections.length"
               class="mt-3 text-xs leading-5 text-ink-faint"
             >
-              还没有相关笔记。点某一天，在编辑器里选择“由这一天写笔记”。
+              还没有相关笔记。打开某一天，在编辑器里选择“由这一天写笔记”。
             </p>
 
             <ul v-else class="mt-2 divide-y divide-rule/70">

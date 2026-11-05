@@ -10,7 +10,7 @@ import type {
 } from '#shared/types'
 import { getDayAppearance } from '#shared/utils/day-appearance'
 import { todayDateOnly } from '#shared/utils/date'
-import { formatDateKey, formatFullDayLabel, formatWeekday } from '~/utils/date-display'
+import { formatDateKey, formatDayLabel, formatFullDayLabel, formatWeekday } from '~/utils/date-display'
 import { dayStatusDot, dayStatusLabel } from '~/utils/day-display'
 
 useHead({ title: '笔记 · Anti-Habit' })
@@ -49,7 +49,7 @@ const composeContextLabel = computed(() => {
   if (!composeGoalId.value) return ''
   const goal = goals.value.find(item => item.id === composeGoalId.value)
   const title = goal?.title ?? '这次打卡'
-  return composeDate.value ? `从「${title}」${composeDate.value} 的打卡写起` : `关联「${title}」`
+  return composeDate.value ? `从「${title}」${formatDayLabel(composeDate.value)}的打卡写起` : `关联「${title}」`
 })
 
 function applyComposeQuery() {
@@ -239,7 +239,7 @@ function handleUpdated(memo: Memo) {
 }
 
 async function handleDelete(item: FeedMemoItem) {
-  if (!window.confirm('删除这则笔记？笔记会从时间线隐藏，但关联的打卡和目标不会被删除。')) return
+  if (!window.confirm('删除这则笔记？它会从时间线隐藏，关联的打卡和目标不受影响。')) return
 
   try {
     await $fetch(`/api/memos/${item.id}`, { method: 'DELETE' })
@@ -325,7 +325,7 @@ watch(() => route.fullPath, () => {
 
             <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <label class="relative block flex-1">
-                <span class="sr-only">搜索笔记正文</span>
+                <span class="sr-only">搜索笔记和打卡反思</span>
                 <UIcon
                   name="i-lucide-search"
                   class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
@@ -421,7 +421,7 @@ watch(() => route.fullPath, () => {
 
               <div v-if="nextCursor" class="flex justify-center pt-1">
                 <UButton
-                  label="加载更早的笔记"
+                  label="加载更早的记录"
                   icon="i-lucide-arrow-down"
                   color="neutral"
                   variant="soft"
@@ -441,7 +441,7 @@ watch(() => route.fullPath, () => {
               <p class="mt-2 text-sm leading-6 text-ink-soft">
                 {{ hasFilters
                   ? '换个关键词，或把筛选切回“全部”。'
-                  : '在上面写下第一则。没有目标也可以开始。' }}
+                  : '在上面的写作区写下第一则。没有目标也可以开始。' }}
               </p>
             </div>
           </div>

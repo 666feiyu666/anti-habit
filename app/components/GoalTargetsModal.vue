@@ -240,7 +240,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
     <template #body>
       <div class="flex flex-wrap items-center justify-between gap-3">
         <p class="max-w-md text-xs leading-5 text-ink-faint">
-          这个目标可以同时设多个目标设定，每项从目标创建当天开始计算。
+          一个目标可以设多个目标设定，每项从创建当天开始计算。
         </p>
         <UButton
           label="新增目标设定"
@@ -368,7 +368,7 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
           还没有目标设定
         </p>
         <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">
-          可以设一个“连续 30 天”，也可以再设一个“累积 100 天”。
+          比如“连续 30 天”，或“累积 100 天”。
         </p>
       </div>
 

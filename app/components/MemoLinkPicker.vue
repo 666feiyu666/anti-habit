@@ -59,7 +59,7 @@ function toggleEntry(entryId: string, checked: boolean) {
         </span>
       </div>
       <p class="mt-1 text-xs leading-5 text-ink-soft">
-        一则笔记可以关联多个习惯，也可以不关联。之后可以从习惯页找回它。
+        一则笔记可以关联多个习惯，也可以不关联；之后能从习惯页找回。
       </p>
 
       <div v-if="goals.length" class="mt-2.5 flex flex-wrap gap-2">
@@ -94,7 +94,7 @@ function toggleEntry(entryId: string, checked: boolean) {
         </span>
       </div>
       <p v-else class="mt-2 text-xs leading-5 text-ink-faint">
-        还没有习惯。笔记可以先写，习惯以后创建也不影响它。
+        还没有习惯。笔记可以先写，以后再创建习惯也不影响它。
       </p>
     </div>
 
@@ -105,11 +105,11 @@ function toggleEntry(entryId: string, checked: boolean) {
           <span class="font-normal text-ink-faint">选填</span>
         </h3>
         <span class="text-xs text-ink-faint">
-          {{ entryIds.length ? `已选 ${entryIds.length} 条` : '不改变完成状态' }}
+          {{ entryIds.length ? `已选 ${entryIds.length} 条` : '不影响完成状态' }}
         </span>
       </div>
       <p class="mt-1 text-xs leading-5 text-ink-soft">
-        把笔记接到某一天的记录上，保存笔记不会修改那天的完成状态。
+        把笔记接到某一天的记录上，不会改动那天的完成状态。
       </p>
 
       <p v-if="checkInsError" class="mt-2 text-xs leading-5 text-miss" role="alert">
@@ -122,7 +122,7 @@ function toggleEntry(entryId: string, checked: boolean) {
         正在读取最近的打卡…
       </p>
       <p v-else-if="!checkIns.length" class="mt-2 text-xs leading-5 text-ink-faint">
-        这些习惯还没有可关联的打卡。也可以只关联习惯。
+        这些习惯还没有可关联的打卡。只关联习惯也可以。
       </p>
 
       <ul
@@ -168,7 +168,7 @@ function toggleEntry(entryId: string, checked: boolean) {
       </ul>
 
       <p v-if="preservedCount" class="mt-1.5 text-xs leading-5 text-ink-faint">
-        另有 {{ preservedCount }} 个已关联的打卡不在最近记录中，保存时会保留。
+        另有 {{ preservedCount }} 条已关联的打卡不在最近记录中，保存时会保留。
       </p>
     </div>
   </section>
