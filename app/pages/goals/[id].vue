@@ -1,7 +1,11 @@
 <script setup lang="ts">
 const route = useRoute()
 
-await navigateTo(`/?goal=${encodeURIComponent(String(route.params.id))}`, { replace: true })
+const goalId = Array.isArray(route.params.id) ? route.params.id[0] : String(route.params.id)
+await navigateTo(
+  { path: '/habits', query: goalId ? { goal: goalId } : {} },
+  { replace: true },
+)
 </script>
 
 <template>

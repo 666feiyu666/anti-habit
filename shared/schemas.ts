@@ -140,3 +140,59 @@ export const updateGoalTargetSchema = createGoalTargetSchema
 export const updateGoalTargetRewardClaimSchema = z.object({
   claimed: z.boolean(),
 })
+
+export const MEMO_CONTENT_MAX_LENGTH = 50_000
+export const MEMO_PAGE_MAX_LIMIT = 50
+export const MEMO_PAGE_DEFAULT_LIMIT = 20
+export const MEMO_SEARCH_MAX_LENGTH = 200
+
+export const memoContentSchema = z
+  .string()
+  .transform(value => value.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim())
+  .refine(value => value.length > 0, '笔记正文不能为空')
+  .refine(
+    value => value.length <= MEMO_CONTENT_MAX_LENGTH,
+    `笔记正文不能超过 ${MEMO_CONTENT_MAX_LENGTH} 个字符`,
+  )
+
+const memoLinkIdsSchema = z
+  .array(z.string().trim().min(1, '关联的对象无效'))
+  .max(100, '一次最多关联 100 个对象')
+  .transform(ids => [...new Set(ids)])
+
+export const createMemoSchema = z.object({
+  content: memoContentSchema,
+  goalIds: memoLinkIdsSchema.optional().default([]),
+  entryIds: memoLinkIdsSchema.optional().default([]),
+})
+
+export const updateMemoSchema = z.object({
+  content: memoContentSchema,
+  goalIds: memoLinkIdsSchema.optional(),
+  entryIds: memoLinkIdsSchema.optional(),
+})
+
+export const feedLinkedFilterSchema = z.enum(['all', 'linked', 'unlinked'])
+
+export const feedQuerySchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .max(MEMO_SEARCH_MAX_LENGTH, `搜索词不能超过 ${MEMO_SEARCH_MAX_LENGTH} 个字符`)
+    .optional()
+    .transform(value => value || undefined),
+  goalId: z
+    .string()
+    .trim()
+    .min(1)
+    .optional(),
+  linked: feedLinkedFilterSchema.optional().default('all'),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MEMO_PAGE_MAX_LIMIT)
+    .optional()
+    .default(MEMO_PAGE_DEFAULT_LIMIT),
+  cursor: z.string().trim().min(1).optional(),
+})

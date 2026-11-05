@@ -37,6 +37,19 @@ export async function parseBody<S extends z.ZodType>(
   return result.data
 }
 
+export function parseQuery<S extends z.ZodType>(
+  event: H3Event,
+  schema: S,
+): z.output<S> {
+  const result = schema.safeParse(getQuery(event))
+  if (!result.success) {
+    const message = result.error.issues[0]?.message || '查询参数无效'
+    throw apiError(400, 'INVALID_QUERY', message)
+  }
+
+  return result.data
+}
+
 export function readDateQuery(value: unknown, field: string): string {
   if (typeof value !== 'string' || !isValidDateOnly(value)) {
     throw apiError(400, 'INVALID_DATE', `${field} 必须是有效的 YYYY-MM-DD 日期`)

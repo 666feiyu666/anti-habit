@@ -12,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:open': [value: boolean]
   changed: []
+  writeNote: [payload: { date: string, entryId: string | null }]
 }>()
 
 const {
@@ -58,6 +59,19 @@ async function handleSave() {
 async function handleClear() {
   if (await clear()) emit('update:open', false)
 }
+
+function handleWriteNote() {
+  if (busy.value) return
+
+  if (dirty.value && !window.confirm('这一天还有未保存的修改，仍然去写笔记吗？')) {
+    return
+  }
+
+  emit('writeNote', {
+    date: props.date,
+    entryId: props.entry?.id ?? null,
+  })
+}
 </script>
 
 <template>
@@ -87,7 +101,15 @@ async function handleClear() {
 
     <template #footer>
       <div class="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <UButton
+            label="由这一天写笔记"
+            icon="i-lucide-feather"
+            color="neutral"
+            variant="soft"
+            :disabled="busy"
+            @click="handleWriteNote"
+          />
           <UButton
             v-if="entry"
             label="清除这一天"

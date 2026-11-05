@@ -53,6 +53,7 @@ describe('database migrations', () => {
           '0002_special_saracen',
           '0003_smart_wolfsbane',
           '0004_amusing_rick_jones',
+          '0005_marvelous_steel_serpent',
         ],
       )
       migrate(drizzle(sqlite), { migrationsFolder })
@@ -101,6 +102,47 @@ describe('database migrations', () => {
       expect(tables.map(table => table.name)).toContain('entry_links')
       expect(tables.map(table => table.name)).toContain('goal_materials')
       expect(tables.map(table => table.name)).toContain('goal_targets')
+      expect(tables.map(table => table.name)).toContain('memos')
+      expect(tables.map(table => table.name)).toContain('memo_goal_links')
+      expect(tables.map(table => table.name)).toContain('memo_entry_links')
+
+      sqlite.exec(`
+        insert into memos (id, content, created_at, updated_at)
+        values ('memo-1', '迁移后的第一则笔记', 200, 200);
+
+        insert into memo_goal_links (memo_id, goal_id, created_at)
+        values ('memo-1', 'goal-1', 200);
+
+        insert into memo_entry_links (memo_id, entry_id, created_at)
+        values ('memo-1', 'entry-1', 200);
+      `)
+      const memoLink = sqlite
+        .prepare(`
+          select m.id, m.content, l.goal_id, e.entry_id
+          from memos m
+          join memo_goal_links l on l.memo_id = m.id
+          join memo_entry_links e on e.memo_id = m.id
+          where m.id = ?
+        `)
+        .get('memo-1') as {
+          id: string
+          content: string
+          goal_id: string
+          entry_id: string
+        }
+      expect(memoLink).toEqual({
+        id: 'memo-1',
+        content: '迁移后的第一则笔记',
+        goal_id: 'goal-1',
+        entry_id: 'entry-1',
+      })
+
+      expect(() => {
+        sqlite.exec(`
+          insert into memos (id, content, created_at, updated_at)
+          values ('memo-empty', '   ', 200, 200);
+        `)
+      }).toThrow()
 
       sqlite.exec(`
         insert into goal_materials (id, goal_id, title, content, source_name, created_at, updated_at)

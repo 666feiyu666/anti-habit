@@ -89,6 +89,56 @@ export const entryLinks = sqliteTable(
   ],
 )
 
+export const memos = sqliteTable(
+  'memos',
+  {
+    id: text('id').primaryKey(),
+    content: text('content').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    deletedAt: integer('deleted_at'),
+  },
+  table => [
+    index('memos_created_at_idx').on(table.createdAt, table.id),
+    index('memos_deleted_at_idx').on(table.deletedAt),
+    check('memos_content_check', sql`length(trim(${table.content})) > 0`),
+  ],
+)
+
+export const memoGoalLinks = sqliteTable(
+  'memo_goal_links',
+  {
+    memoId: text('memo_id')
+      .notNull()
+      .references(() => memos.id),
+    goalId: text('goal_id')
+      .notNull()
+      .references(() => goals.id),
+    createdAt: integer('created_at').notNull(),
+  },
+  table => [
+    primaryKey({ columns: [table.memoId, table.goalId] }),
+    index('memo_goal_links_goal_id_idx').on(table.goalId),
+  ],
+)
+
+export const memoEntryLinks = sqliteTable(
+  'memo_entry_links',
+  {
+    memoId: text('memo_id')
+      .notNull()
+      .references(() => memos.id),
+    entryId: text('entry_id')
+      .notNull()
+      .references(() => dailyEntries.id),
+    createdAt: integer('created_at').notNull(),
+  },
+  table => [
+    primaryKey({ columns: [table.memoId, table.entryId] }),
+    index('memo_entry_links_entry_id_idx').on(table.entryId),
+  ],
+)
+
 export type GoalRow = typeof goals.$inferSelect
 export type NewGoalRow = typeof goals.$inferInsert
 export type DailyEntryRow = typeof dailyEntries.$inferSelect
@@ -99,3 +149,7 @@ export type GoalMaterialRow = typeof goalMaterials.$inferSelect
 export type NewGoalMaterialRow = typeof goalMaterials.$inferInsert
 export type GoalTargetRow = typeof goalTargets.$inferSelect
 export type NewGoalTargetRow = typeof goalTargets.$inferInsert
+export type MemoRow = typeof memos.$inferSelect
+export type NewMemoRow = typeof memos.$inferInsert
+export type MemoGoalLinkRow = typeof memoGoalLinks.$inferSelect
+export type MemoEntryLinkRow = typeof memoEntryLinks.$inferSelect
