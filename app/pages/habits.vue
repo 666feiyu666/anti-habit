@@ -3,7 +3,7 @@ import { addMonths, endOfMonth, endOfWeek, format, parseISO, startOfMonth, start
 import type { DailyEntryWithLinks, EssayEntry, Goal, GoalRelatedMemos, GoalSummary } from '#shared/types'
 import { getDayAppearance } from '#shared/utils/day-appearance'
 import { isValidDateOnly, todayDateOnly } from '#shared/utils/date'
-import { formatDateKey, formatDayLabel, formatMonthLabel, formatWeekday } from '~/utils/date-display'
+import { formatDateKey, formatDayLabel, formatFullDayLabel, formatMonthLabel, formatWeekday } from '~/utils/date-display'
 import { dayStatusDot, dayStatusLabel } from '~/utils/day-display'
 import { markdownExcerpt } from '~/utils/markdown'
 
@@ -111,8 +111,24 @@ const {
   },
 )
 
-const relatedMemos = computed(() => relatedData.value?.memos.slice(0, 5) ?? [])
-const relatedReflections = computed(() => relatedData.value?.reflections.slice(0, 5) ?? [])
+const allRelatedMemos = computed(() => relatedData.value?.memos ?? [])
+const allRelatedReflections = computed(() => relatedData.value?.reflections ?? [])
+const relatedMemoCount = computed(() => allRelatedMemos.value.length)
+const relatedReflectionCount = computed(() => allRelatedReflections.value.length)
+const relatedTotal = computed(() => relatedMemoCount.value + relatedReflectionCount.value)
+const relatedMemos = computed(() => allRelatedMemos.value.slice(0, 5))
+const relatedReflections = computed(() => allRelatedReflections.value.slice(0, 5))
+
+const selectedDayMemos = computed(() => allRelatedMemos.value.filter(memo =>
+  memo.entries.some(entry => entry.entryDate === selectedDate.value),
+))
+const selectedDayReflection = computed(() => (
+  allRelatedReflections.value.find(reflection => reflection.entryDate === selectedDate.value) ?? null
+))
+const selectedDayNoteCount = computed(
+  () => selectedDayMemos.value.length + (selectedDayReflection.value ? 1 : 0),
+)
+const selectedDayAppearance = computed(() => getDayAppearance(selectedEntry.value))
 
 const isCreateOpen = ref(false)
 const editTarget = ref<GoalSummary | null>(null)
@@ -344,10 +360,11 @@ onMounted(() => {
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div class="min-w-0 flex-1">
                 <h1 class="truncate font-serif text-3xl tracking-tight text-ink sm:text-4xl">
-                  {{ selectedGoal.essayTitle || '随笔' }}
-                </h1>
-                <p class="mt-1 truncate text-sm text-ink-soft">
                   {{ selectedGoal.title }}
+                </h1>
+                <p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+                  <span class="truncate">{{ selectedGoal.essayTitle || '随笔' }}</span>
+                  <span v-if="selectedGoal.essayTitle" class="text-xs text-ink-faint">旧版随笔</span>
                 </p>
               </div>
 
@@ -449,6 +466,98 @@ onMounted(() => {
             <p class="mt-4 max-w-xl text-pretty text-xs leading-5 text-ink-faint">
               点一天，记下完成或未完成，也可以继续以前的想法；还能从这次打卡直接写一则笔记。
             </p>
+
+            <section
+              class="mt-5 rounded-sm border border-rule bg-sheet/60 p-4"
+              aria-labelledby="day-context-heading"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 id="day-context-heading" class="font-serif text-lg text-ink">
+                    {{ formatFullDayLabel(selectedDate) }}
+                  </h3>
+                  <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">
+                    <span class="flex items-center gap-1.5">
+                      <span
+                        class="size-2 rounded-[2px]"
+                        :class="dayStatusDot[selectedDayAppearance]"
+                        aria-hidden="true"
+                      />
+                      {{ selectedEntry ? (selectedEntry.status === 'completed' ? '完成' : '未完成') : '尚未记录' }}
+                    </span>
+                    <span v-if="selectedDayNoteCount" class="text-ink-faint">
+                      · {{ selectedDayNoteCount }} 则相关记录
+                    </span>
+                  </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <UButton
+                    label="记录完成状态"
+                    icon="i-lucide-check"
+                    color="neutral"
+                    variant="soft"
+                    size="sm"
+                    @click="openDay(selectedDate)"
+                  />
+                  <UButton
+                    label="从这一天写笔记"
+                    icon="i-lucide-feather"
+                    size="sm"
+                    @click="handleWriteNote({ date: selectedDate, entryId: selectedEntry?.id ?? null })"
+                  />
+                </div>
+              </div>
+
+              <div
+                v-if="selectedDayReflection"
+                class="mt-3 rounded-sm border-l-2 border-l-brass/70 bg-brass-soft/20 px-3 py-2"
+              >
+                <div class="flex items-baseline justify-between gap-2">
+                  <p class="text-xs text-ink-faint">
+                    打卡反思
+                  </p>
+                  <button
+                    type="button"
+                    class="text-xs text-done underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+                    @click="openDay(selectedDate)"
+                  >
+                    在原日期编辑
+                  </button>
+                </div>
+                <p class="mt-1 line-clamp-2 font-serif text-sm leading-6 text-ink">
+                  {{ markdownExcerpt(selectedDayReflection.reflection ?? '', 160) }}
+                </p>
+              </div>
+
+              <ul
+                v-if="selectedDayMemos.length"
+                class="mt-3 divide-y divide-rule/60 border-t border-rule/60"
+              >
+                <li v-for="memo in selectedDayMemos.slice(0, 3)" :key="memo.id">
+                  <NuxtLink
+                    :to="{ path: '/', query: { memo: memo.id } }"
+                    class="group flex items-start gap-2 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+                  >
+                    <UIcon name="i-lucide-feather" class="mt-1 size-3.5 shrink-0 text-done" aria-hidden="true" />
+                    <span class="min-w-0">
+                      <span class="line-clamp-2 block font-serif text-sm leading-6 text-ink group-hover:text-done">
+                        {{ markdownExcerpt(memo.content, 140) }}
+                      </span>
+                      <span class="mt-0.5 block text-xs text-ink-faint">笔记</span>
+                    </span>
+                  </NuxtLink>
+                </li>
+              </ul>
+              <p v-if="selectedDayMemos.length > 3" class="mt-1 text-xs text-ink-faint">
+                还有 {{ selectedDayMemos.length - 3 }} 则，见下方相关笔记。
+              </p>
+              <p
+                v-if="!selectedDayMemos.length && !selectedDayReflection"
+                class="mt-3 text-xs leading-5 text-ink-faint"
+              >
+                这一天还没有文字记录。可以记录完成状态，也可以直接写一则笔记。
+              </p>
+            </section>
           </section>
 
           <section class="reveal reveal-later mt-10" aria-labelledby="related-heading">
@@ -462,10 +571,11 @@ onMounted(() => {
                 </p>
               </div>
               <NuxtLink
+                v-if="relatedTotal"
                 :to="{ path: '/', query: { filterGoal: selectedGoal.id } }"
                 class="text-xs text-done underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
               >
-                在时间线里看
+                查看全部（{{ relatedTotal }}）
               </NuxtLink>
             </div>
 

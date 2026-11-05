@@ -7,11 +7,14 @@ import type {
   FeedPage,
   GoalSummary,
   Memo,
+  ReviewItem,
+  ReviewPage,
 } from '#shared/types'
 import { getDayAppearance } from '#shared/utils/day-appearance'
 import { todayDateOnly } from '#shared/utils/date'
 import { formatDateKey, formatDayLabel, formatFullDayLabel, formatWeekday } from '~/utils/date-display'
 import { dayStatusDot, dayStatusLabel } from '~/utils/day-display'
+import { markdownExcerpt } from '~/utils/markdown'
 
 useHead({ title: '笔记 · Anti-Habit' })
 
@@ -39,12 +42,30 @@ const composeGoalId = ref<string | null>(null)
 const composeEntryId = ref<string | null>(null)
 const composeDate = ref<string | null>(null)
 const composeKey = ref(0)
+const writeNonce = ref(0)
+
+interface ReplyContext {
+  type: 'memo' | 'entry'
+  id: string
+  label: string
+  excerpt: string
+}
+
+const replyContext = ref<ReplyContext | null>(null)
+
+const reviewItem = ref<ReviewItem | null>(null)
+const reviewPending = ref(false)
+const reviewBusy = ref(false)
+const REVIEW_PROMPT_KEY = 'anti-habit:review-prompted-on'
 
 const initialGoalIds = computed(() => composeGoalId.value ? [composeGoalId.value] : [])
 const initialEntryIds = computed(() => composeEntryId.value ? [composeEntryId.value] : [])
-const composerDraftKey = computed(
-  () => `new:${composeGoalId.value ?? 'none'}:${composeEntryId.value ?? composeDate.value ?? 'none'}`,
-)
+const composerDraftKey = computed(() => {
+  const replyKey = replyContext.value
+    ? `reply-${replyContext.value.type}-${replyContext.value.id}`
+    : 'none'
+  return `new:${composeGoalId.value ?? 'none'}:${composeEntryId.value ?? composeDate.value ?? 'none'}:${replyKey}`
+})
 const composeContextLabel = computed(() => {
   if (!composeGoalId.value) return ''
   const goal = goals.value.find(item => item.id === composeGoalId.value)
@@ -52,7 +73,7 @@ const composeContextLabel = computed(() => {
   return composeDate.value ? `从「${title}」${formatDayLabel(composeDate.value)}的打卡写起` : `关联「${title}」`
 })
 
-function applyComposeQuery() {
+async function applyComposeQuery() {
   const goal = typeof route.query.composeGoal === 'string' ? route.query.composeGoal : null
 
   if (goal) {
@@ -62,20 +83,40 @@ function applyComposeQuery() {
     composeKey.value += 1
   }
 
+  if (route.query.write === '1') {
+    writeNonce.value += 1
+  }
+
+  const replyMemoId = typeof route.query.replyToMemo === 'string' ? route.query.replyToMemo : null
+  const replyEntryId = typeof route.query.replyToEntry === 'string' ? route.query.replyToEntry : null
+
+  if (replyMemoId || replyEntryId) {
+    const type: 'memo' | 'entry' = replyMemoId ? 'memo' : 'entry'
+    const id = replyMemoId ?? replyEntryId!
+
+    try {
+      const { item } = await $fetch<{ item: ReviewItem }>(`/api/review/${type}/${id}`)
+      replyContext.value = {
+        type,
+        id,
+        label: item.kind === 'daily_reflection'
+          ? `回应 ${formatDayLabel(item.entryDate)} 的打卡反思`
+          : `回应 ${formatDayLabel(formatDateKey(new Date(item.createdAt * 1000)))} 的笔记`,
+        excerpt: markdownExcerpt(item.content, 140),
+      }
+      composeKey.value += 1
+      writeNonce.value += 1
+    } catch (caught) {
+      toast.add({ title: getApiErrorMessage(caught), color: 'error' })
+    }
+  }
+
   const filterGoal = typeof route.query.filterGoal === 'string' ? route.query.filterGoal : null
   if (filterGoal && filterGoal !== goalFilter.value) {
     goalFilter.value = filterGoal
   }
 
-  const query = { ...route.query }
-  let changed = false
-  for (const key of ['composeGoal', 'composeEntry', 'composeDate', 'filterGoal']) {
-    if (key in query) {
-      delete query[key]
-      changed = true
-    }
-  }
-  if (changed) void router.replace({ query })
+  syncFeedQuery()
 }
 
 /* ---------------- 时间线 ---------------- */
@@ -90,10 +131,18 @@ const highlightId = ref<string | null>(null)
 const requestSerial = ref(0)
 let highlightApplied = false
 
-const searchInput = ref('')
-const searchQuery = ref('')
-const linkedFilter = ref<FeedLinkedFilter>('all')
-const goalFilter = ref(typeof route.query.filterGoal === 'string' ? route.query.filterGoal : '')
+const initialSearch = typeof route.query.q === 'string' ? route.query.q : ''
+const initialLinked = route.query.linked
+const initialGoalFilter = typeof route.query.goalFilter === 'string'
+  ? route.query.goalFilter
+  : (typeof route.query.filterGoal === 'string' ? route.query.filterGoal : '')
+
+const searchInput = ref(initialSearch)
+const searchQuery = ref(initialSearch.trim())
+const linkedFilter = ref<FeedLinkedFilter>(
+  initialLinked === 'linked' || initialLinked === 'unlinked' ? initialLinked : 'all',
+)
+const goalFilter = ref(initialGoalFilter)
 const hasFilters = computed(
   () => Boolean(searchQuery.value || goalFilter.value || linkedFilter.value !== 'all'),
 )
@@ -212,15 +261,81 @@ async function loadFeed(reset = true) {
   }
 }
 
+const SCROLL_KEY = 'anti-habit:home-scroll'
+
+function syncFeedQuery() {
+  if (!import.meta.client) return
+
+  const next = { ...route.query }
+  for (const key of [
+    'q',
+    'linked',
+    'goalFilter',
+    'filterGoal',
+    'composeGoal',
+    'composeEntry',
+    'composeDate',
+    'write',
+    'replyToMemo',
+    'replyToEntry',
+  ]) {
+    delete next[key]
+  }
+
+  if (searchQuery.value) next.q = searchQuery.value
+  if (linkedFilter.value !== 'all') next.linked = linkedFilter.value
+  if (goalFilter.value) next.goalFilter = goalFilter.value
+
+  const same = String(route.query.q ?? '') === String(next.q ?? '')
+    && String(route.query.linked ?? '') === String(next.linked ?? '')
+    && String(route.query.goalFilter ?? '') === String(next.goalFilter ?? '')
+    && !('filterGoal' in route.query)
+    && !('write' in route.query)
+    && !('composeGoal' in route.query)
+    && !('composeEntry' in route.query)
+    && !('composeDate' in route.query)
+    && !('replyToMemo' in route.query)
+    && !('replyToEntry' in route.query)
+
+  if (same) return
+  void router.replace({ query: next })
+}
+
+function clearFilters() {
+  searchInput.value = ''
+  searchQuery.value = ''
+  linkedFilter.value = 'all'
+  goalFilter.value = ''
+}
+
 watch([searchQuery, linkedFilter, goalFilter], () => {
   void loadFeed(true)
+  syncFeedQuery()
 })
+
+watch(
+  () => [route.query.q, route.query.linked, route.query.goalFilter],
+  ([rawQuery, rawLinked, rawGoal]) => {
+    const nextQuery = typeof rawQuery === 'string' ? rawQuery : ''
+    if (nextQuery !== searchQuery.value) {
+      searchInput.value = nextQuery
+      searchQuery.value = nextQuery.trim()
+    }
+
+    const nextLinked = rawLinked === 'linked' || rawLinked === 'unlinked' ? rawLinked : 'all'
+    if (nextLinked !== linkedFilter.value) linkedFilter.value = nextLinked
+
+    const nextGoal = typeof rawGoal === 'string' ? rawGoal : ''
+    if (nextGoal !== goalFilter.value) goalFilter.value = nextGoal
+  },
+)
 
 /* ---------------- 笔记操作 ---------------- */
 
 const editingMemo = ref<FeedMemoItem | null>(null)
 
 async function handleCreated(memo: Memo) {
+  replyContext.value = null
   toast.add({ title: '笔记已保存', color: 'neutral' })
   await loadFeed(true)
   await nextTick()
@@ -256,17 +371,129 @@ function statusFor(goal: GoalSummary): 'completed' | 'missed' | 'reflected-miss'
   return getDayAppearance(goal.todayEntry)
 }
 
+function replyLabel(item: ReviewItem): string {
+  return item.kind === 'daily_reflection'
+    ? `回应 ${formatDayLabel(item.entryDate)} 的打卡反思`
+    : `回应 ${formatDayLabel(formatDateKey(new Date(item.createdAt * 1000)))} 的笔记`
+}
+
+function startReply(item: ReviewItem) {
+  replyContext.value = {
+    type: item.sourceType,
+    id: item.id,
+    label: replyLabel(item),
+    excerpt: markdownExcerpt(item.content, 140),
+  }
+  reviewItem.value = null
+  composeKey.value += 1
+  writeNonce.value += 1
+  void nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+}
+
+function continueReview() {
+  if (reviewItem.value) startReply(reviewItem.value)
+}
+
+async function loadReviewPrompt() {
+  if (!import.meta.client) return
+
+  let prompted: string | null = null
+  try {
+    prompted = localStorage.getItem(REVIEW_PROMPT_KEY)
+  } catch {
+    prompted = null
+  }
+
+  if (prompted === today.value) return
+
+  reviewPending.value = true
+  try {
+    const page = await $fetch<ReviewPage>('/api/review', { query: { limit: 1 } })
+    const item = page.items[0]
+    if (!item) return
+
+    reviewItem.value = item
+    try {
+      localStorage.setItem(REVIEW_PROMPT_KEY, today.value)
+    } catch {
+      // 本地存储不可用时，提示仍然显示。
+    }
+  } catch {
+    // 回看提示失败不影响写作。
+  } finally {
+    reviewPending.value = false
+  }
+}
+
+async function handleReviewAction(action: 'read' | 'later' | 'dismiss') {
+  const item = reviewItem.value
+  if (!item || reviewBusy.value) return
+
+  reviewBusy.value = true
+  try {
+    await $fetch(`/api/review/${item.sourceType}/${item.id}`, {
+      method: 'POST',
+      body: { action },
+    })
+    reviewItem.value = null
+    toast.add({
+      title: action === 'read'
+        ? '已读过，二十一天后再看'
+        : action === 'later'
+          ? '七天后再看'
+          : '不再推荐这则记录',
+      color: 'neutral',
+    })
+  } catch (caught) {
+    toast.add({ title: getApiErrorMessage(caught), color: 'error' })
+  } finally {
+    reviewBusy.value = false
+  }
+}
+
 onMounted(() => {
-  applyComposeQuery()
+  void applyComposeQuery()
 
   const actualToday = todayDateOnly()
   if (actualToday !== today.value) today.value = actualToday
 
-  void loadFeed(true)
+  void loadReviewPrompt()
+
+  let savedScroll: string | null = null
+  try {
+    savedScroll = sessionStorage.getItem(SCROLL_KEY)
+  } catch {
+    savedScroll = null
+  }
+  const shouldRestore = savedScroll !== null && !route.query.memo
+
+  void loadFeed(true).then(() => {
+    if (!shouldRestore) return
+    void nextTick(() => {
+      window.scrollTo({ top: Number(savedScroll) || 0, behavior: 'auto' })
+    })
+  })
+})
+
+onBeforeUnmount(() => {
+  if (!import.meta.client) return
+  try {
+    sessionStorage.setItem(SCROLL_KEY, String(window.scrollY))
+  } catch {
+    // 会话存储不可用时忽略返回位置。
+  }
 })
 
 watch(() => route.fullPath, () => {
-  if (route.query.composeGoal || route.query.filterGoal) applyComposeQuery()
+  if (
+    route.query.composeGoal
+    || route.query.filterGoal
+    || route.query.write === '1'
+    || route.query.replyToMemo
+    || route.query.replyToEntry
+  ) {
+    void applyComposeQuery()
+  }
 })
 </script>
 
@@ -308,8 +535,39 @@ watch(() => route.fullPath, () => {
               :initial-goal-ids="initialGoalIds"
               :initial-entry-ids="initialEntryIds"
               :draft-key="composerDraftKey"
+              :collapsible="true"
+              :expand-nonce="writeNonce"
+              :reply-context="replyContext"
               autofocus
               @saved="handleCreated"
+              @clear-reply="replyContext = null"
+            />
+          </div>
+
+          <div v-if="reviewPending || reviewItem" class="mt-8">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 class="font-serif text-xl text-ink">
+                今天读一则
+              </h2>
+              <NuxtLink
+                to="/review"
+                class="text-xs text-done underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+              >
+                打开回看
+              </NuxtLink>
+            </div>
+            <p v-if="reviewPending" class="text-xs text-ink-faint">
+              正在找旧记录…
+            </p>
+            <ReviewCard
+              v-else-if="reviewItem"
+              :item="reviewItem"
+              compact
+              :busy="reviewBusy"
+              @read="handleReviewAction('read')"
+              @later="handleReviewAction('later')"
+              @dismiss="handleReviewAction('dismiss')"
+              @continue="continueReview"
             />
           </div>
 
@@ -373,6 +631,15 @@ watch(() => route.fullPath, () => {
                     {{ goal.title }}
                   </option>
                 </select>
+
+                <button
+                  v-if="hasFilters"
+                  type="button"
+                  class="text-xs text-ink-faint underline-offset-4 hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+                  @click="clearFilters"
+                >
+                  清除筛选
+                </button>
               </div>
             </div>
 

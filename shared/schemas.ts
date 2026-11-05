@@ -160,10 +160,18 @@ const memoLinkIdsSchema = z
   .max(100, '一次最多关联 100 个对象')
   .transform(ids => [...new Set(ids)])
 
+export const reviewSourceTypeSchema = z.enum(['memo', 'entry'], '来源类型无效')
+
+export const memoReplySchema = z.object({
+  type: reviewSourceTypeSchema,
+  id: z.string().trim().min(1, '回应的对象无效'),
+})
+
 export const createMemoSchema = z.object({
   content: memoContentSchema,
   goalIds: memoLinkIdsSchema.optional().default([]),
   entryIds: memoLinkIdsSchema.optional().default([]),
+  replyTo: memoReplySchema.optional(),
 })
 
 export const updateMemoSchema = z.object({
@@ -187,6 +195,23 @@ export const feedQuerySchema = z.object({
     .min(1)
     .optional(),
   linked: feedLinkedFilterSchema.optional().default('all'),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MEMO_PAGE_MAX_LIMIT)
+    .optional()
+    .default(MEMO_PAGE_DEFAULT_LIMIT),
+  cursor: z.string().trim().min(1).optional(),
+})
+
+export const reviewActionSchema = z.enum(['read', 'later', 'dismiss'], '回看操作无效')
+
+export const reviewActionBodySchema = z.object({
+  action: reviewActionSchema,
+})
+
+export const reviewQuerySchema = z.object({
   limit: z.coerce
     .number()
     .int()

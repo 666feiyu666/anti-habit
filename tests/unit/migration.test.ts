@@ -54,6 +54,7 @@ describe('database migrations', () => {
           '0003_smart_wolfsbane',
           '0004_amusing_rick_jones',
           '0005_marvelous_steel_serpent',
+          '0006_massive_the_twelve',
         ],
       )
       migrate(drizzle(sqlite), { migrationsFolder })
@@ -105,6 +106,8 @@ describe('database migrations', () => {
       expect(tables.map(table => table.name)).toContain('memos')
       expect(tables.map(table => table.name)).toContain('memo_goal_links')
       expect(tables.map(table => table.name)).toContain('memo_entry_links')
+      expect(tables.map(table => table.name)).toContain('memo_relations')
+      expect(tables.map(table => table.name)).toContain('review_states')
 
       sqlite.exec(`
         insert into memos (id, content, created_at, updated_at)
@@ -141,6 +144,64 @@ describe('database migrations', () => {
         sqlite.exec(`
           insert into memos (id, content, created_at, updated_at)
           values ('memo-empty', '   ', 200, 200);
+        `)
+      }).toThrow()
+
+      sqlite.exec(`
+        insert into memos (id, content, created_at, updated_at)
+        values ('memo-2', '后来的回应', 300, 300);
+
+        insert into memo_relations (source_memo_id, target_memo_id, created_at)
+        values ('memo-2', 'memo-1', 300);
+
+        insert into review_states (
+          id, memo_id, entry_id, last_reviewed_at, next_review_at, dismissed_at, created_at, updated_at
+        ) values (
+          'state-memo', 'memo-1', null, null, 620, null, 300, 300
+        );
+
+        insert into review_states (
+          id, memo_id, entry_id, last_reviewed_at, next_review_at, dismissed_at, created_at, updated_at
+        ) values (
+          'state-entry', null, 'entry-1', 300, 600, null, 300, 300
+        );
+      `)
+
+      const relation = sqlite
+        .prepare('select source_memo_id, target_memo_id from memo_relations where source_memo_id = ?')
+        .get('memo-2') as { source_memo_id: string, target_memo_id: string }
+      expect(relation).toEqual({
+        source_memo_id: 'memo-2',
+        target_memo_id: 'memo-1',
+      })
+
+      const states = sqlite
+        .prepare('select id, memo_id, entry_id, next_review_at from review_states order by id')
+        .all() as Array<{
+          id: string
+          memo_id: string | null
+          entry_id: string | null
+          next_review_at: number | null
+        }>
+      expect(states).toEqual([
+        { id: 'state-entry', memo_id: null, entry_id: 'entry-1', next_review_at: 600 },
+        { id: 'state-memo', memo_id: 'memo-1', entry_id: null, next_review_at: 620 },
+      ])
+
+      expect(() => {
+        sqlite.exec(`
+          insert into memo_relations (source_memo_id, target_memo_id, created_at)
+          values ('memo-1', 'memo-1', 300);
+        `)
+      }).toThrow()
+
+      expect(() => {
+        sqlite.exec(`
+          insert into review_states (
+            id, memo_id, entry_id, last_reviewed_at, next_review_at, dismissed_at, created_at, updated_at
+          ) values (
+            'state-both', 'memo-1', 'entry-1', null, 600, null, 300, 300
+          );
         `)
       }).toThrow()
 

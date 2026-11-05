@@ -43,6 +43,13 @@
       "when": 1793883564787,
       "tag": "0005_marvelous_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793886875597,
+      "tag": "0006_massive_the_twelve",
+      "breakpoints": true
     }
   ]
 }

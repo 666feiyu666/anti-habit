@@ -139,6 +139,48 @@ export const memoEntryLinks = sqliteTable(
   ],
 )
 
+export const memoRelations = sqliteTable(
+  'memo_relations',
+  {
+    sourceMemoId: text('source_memo_id')
+      .notNull()
+      .references(() => memos.id),
+    targetMemoId: text('target_memo_id')
+      .notNull()
+      .references(() => memos.id),
+    createdAt: integer('created_at').notNull(),
+  },
+  table => [
+    primaryKey({ columns: [table.sourceMemoId, table.targetMemoId] }),
+    index('memo_relations_source_idx').on(table.sourceMemoId),
+    index('memo_relations_target_idx').on(table.targetMemoId),
+    check('memo_relations_not_self_check', sql`${table.sourceMemoId} <> ${table.targetMemoId}`),
+  ],
+)
+
+export const reviewStates = sqliteTable(
+  'review_states',
+  {
+    id: text('id').primaryKey(),
+    memoId: text('memo_id').references(() => memos.id),
+    entryId: text('entry_id').references(() => dailyEntries.id),
+    lastReviewedAt: integer('last_reviewed_at'),
+    nextReviewAt: integer('next_review_at'),
+    dismissedAt: integer('dismissed_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  table => [
+    uniqueIndex('review_states_memo_id_unique').on(table.memoId),
+    uniqueIndex('review_states_entry_id_unique').on(table.entryId),
+    index('review_states_next_review_at_idx').on(table.nextReviewAt),
+    check(
+      'review_states_one_source_check',
+      sql`(${table.memoId} is null) <> (${table.entryId} is null)`,
+    ),
+  ],
+)
+
 export type GoalRow = typeof goals.$inferSelect
 export type NewGoalRow = typeof goals.$inferInsert
 export type DailyEntryRow = typeof dailyEntries.$inferSelect
@@ -153,3 +195,7 @@ export type MemoRow = typeof memos.$inferSelect
 export type NewMemoRow = typeof memos.$inferInsert
 export type MemoGoalLinkRow = typeof memoGoalLinks.$inferSelect
 export type MemoEntryLinkRow = typeof memoEntryLinks.$inferSelect
+export type MemoRelationRow = typeof memoRelations.$inferSelect
+export type NewMemoRelationRow = typeof memoRelations.$inferInsert
+export type ReviewStateRow = typeof reviewStates.$inferSelect
+export type NewReviewStateRow = typeof reviewStates.$inferInsert

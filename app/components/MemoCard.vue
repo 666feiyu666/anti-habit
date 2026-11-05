@@ -15,11 +15,42 @@ const emit = defineEmits<{
 }>()
 
 const expanded = ref(false)
+const menuOpen = ref(false)
 const rendered = computed(() => renderMarkdown(props.item.content))
 const isLong = computed(
   () => props.item.content.length > 520 || props.item.content.split('\n').length > 12,
 )
 const timeLabel = computed(() => format(new Date(props.item.createdAt * 1000), 'HH:mm'))
+
+const menuItems = computed(() => [
+  [
+    {
+      label: '编辑正文',
+      icon: 'i-lucide-pencil',
+      onSelect: () => {
+        menuOpen.value = false
+        emit('edit')
+      },
+    },
+    {
+      label: '复制正文',
+      icon: 'i-lucide-copy',
+      onSelect: () => {
+        menuOpen.value = false
+        void copyText()
+      },
+    },
+    {
+      label: '删除这则笔记',
+      icon: 'i-lucide-trash-2',
+      color: 'error' as const,
+      onSelect: () => {
+        menuOpen.value = false
+        emit('delete')
+      },
+    },
+  ],
+])
 
 function goalLink(goal: MemoGoalRef) {
   return { path: '/habits', query: { goal: goal.id } }
@@ -42,8 +73,8 @@ async function copyText() {
 <template>
   <article
     :id="`memo-${item.id}`"
-    class="paper-card group relative rounded-sm px-4 py-4 transition-shadow motion-reduce:transition-none sm:px-5"
-    :class="highlighted ? 'ring-2 ring-brass ring-offset-2 ring-offset-paper' : ''"
+    class="group relative border-b border-rule/70 px-1 py-4 transition-colors motion-reduce:transition-none sm:px-2"
+    :class="highlighted ? 'rounded-sm bg-sheet/70 ring-2 ring-brass ring-offset-2 ring-offset-paper' : ''"
     :aria-label="`笔记，${timeLabel}`"
   >
     <header class="flex items-start justify-between gap-3">
@@ -55,32 +86,19 @@ async function copyText() {
         <span v-if="item.updatedAt > item.createdAt" class="text-ink-faint">已编辑</span>
       </div>
 
-      <div class="flex shrink-0 items-center gap-0.5">
+      <UDropdownMenu
+        v-model:open="menuOpen"
+        :items="menuItems"
+        :content="{ align: 'end' }"
+      >
         <UButton
-          icon="i-lucide-copy"
+          icon="i-lucide-ellipsis-vertical"
           color="neutral"
           variant="ghost"
           size="xs"
-          aria-label="复制正文"
-          @click="copyText"
+          aria-label="笔记操作"
         />
-        <UButton
-          icon="i-lucide-pencil"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          aria-label="编辑这则笔记"
-          @click="emit('edit')"
-        />
-        <UButton
-          icon="i-lucide-trash-2"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          aria-label="删除这则笔记"
-          @click="emit('delete')"
-        />
-      </div>
+      </UDropdownMenu>
     </header>
 
     <div class="relative mt-2.5">
@@ -91,7 +109,7 @@ async function copyText() {
       />
       <div
         v-if="isLong && !expanded"
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-sheet to-transparent"
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-paper to-transparent"
         aria-hidden="true"
       />
       <button
@@ -112,8 +130,25 @@ async function copyText() {
       </button>
     </div>
 
+    <div class="mt-3 flex flex-wrap items-center gap-3">
+      <NuxtLink
+        :to="{ path: '/', query: { replyToMemo: item.id } }"
+        class="inline-flex items-center gap-1.5 text-sm text-done underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+      >
+        <UIcon name="i-lucide-corner-down-right" class="size-3.5" aria-hidden="true" />
+        继续写
+      </NuxtLink>
+      <button
+        type="button"
+        class="text-xs text-ink-soft underline-offset-4 hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+        @click="emit('edit')"
+      >
+        关联
+      </button>
+    </div>
+
     <footer
-      v-if="item.goals.length || item.entries.length"
+      v-if="item.goals.length || item.entries.length || item.outgoingMemos.length || item.incomingMemos.length"
       class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-rule/70 pt-2.5"
     >
       <template v-for="goal in item.goals" :key="goal.id">
@@ -160,6 +195,44 @@ async function copyText() {
         <UIcon name="i-lucide-eye-off" class="size-3" aria-hidden="true" />
         {{ item.hiddenEntryIds.length }} 条打卡关联暂时隐藏
       </span>
+
+      <div
+        v-if="item.outgoingMemos.length"
+        class="flex w-full flex-wrap items-center gap-1.5 pt-1 text-xs text-ink-faint"
+      >
+        <span class="inline-flex items-center gap-1">
+          <UIcon name="i-lucide-corner-up-left" class="size-3" aria-hidden="true" />
+          回应了
+        </span>
+        <NuxtLink
+          v-for="relation in item.outgoingMemos"
+          :key="relation.id"
+          :to="{ path: '/', query: { memo: relation.id } }"
+          class="inline-block max-w-64 truncate text-done underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+          :title="relation.excerpt"
+        >
+          {{ relation.excerpt }}
+        </NuxtLink>
+      </div>
+
+      <div
+        v-if="item.incomingMemos.length"
+        class="flex w-full flex-wrap items-center gap-1.5 pt-1 text-xs text-ink-faint"
+      >
+        <span class="inline-flex items-center gap-1">
+          <UIcon name="i-lucide-corner-down-right" class="size-3" aria-hidden="true" />
+          后来被
+        </span>
+        <NuxtLink
+          v-for="relation in item.incomingMemos"
+          :key="relation.id"
+          :to="{ path: '/', query: { memo: relation.id } }"
+          class="inline-block max-w-64 truncate text-done underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+          :title="relation.excerpt"
+        >
+          {{ relation.excerpt }}
+        </NuxtLink>
+      </div>
     </footer>
   </article>
 </template>

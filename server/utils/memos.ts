@@ -10,11 +10,21 @@ import type {
   MemoEntryRef,
   MemoGoalRef,
   MemoPage,
+  MemoRelationRef,
 } from '~~/shared/types'
-import { dailyEntries, goals, memoEntryLinks, memoGoalLinks, memos, type MemoRow } from '../database/schema'
+import {
+  dailyEntries,
+  goals,
+  memoEntryLinks,
+  memoGoalLinks,
+  memoRelations,
+  memos,
+  type MemoRow,
+} from '../database/schema'
 import type { AppDatabase } from './db'
 import { attachLinkedEntryIds } from './essays'
 import { apiError } from './http'
+import { markReviewRead, requireReviewSource } from './review-state'
 
 type Database = AppDatabase
 
@@ -36,6 +46,10 @@ export interface MemoWriteInput {
   content: string
   goalIds?: string[]
   entryIds?: string[]
+  replyTo?: {
+    type: 'memo' | 'entry'
+    id: string
+  }
 }
 
 function encodeCursor(payload: CursorPayload): string {
@@ -117,11 +131,22 @@ function feedCursorCondition(payload: CursorPayload, kind: FeedItem['kind']): SQ
     : tableCursorCondition(payload, sql`e.created_at`, sql`e.id`, 'daily_reflection')
 }
 
+function relationRef(id: string, content: string, createdAt: number): MemoRelationRef {
+  const plain = content.replace(/\s+/g, ' ').trim()
+  return {
+    id,
+    excerpt: plain.length > 120 ? `${plain.slice(0, 120)}…` : plain,
+    createdAt,
+  }
+}
+
 function toMemo(
   row: MemoRow,
   goalRefs: MemoGoalRef[],
   entries: MemoEntryRef[],
   hiddenEntryIds: string[],
+  outgoingMemos: MemoRelationRef[],
+  incomingMemos: MemoRelationRef[],
 ): Memo {
   return {
     id: row.id,
@@ -131,6 +156,8 @@ function toMemo(
     goals: goalRefs,
     entries,
     hiddenEntryIds,
+    outgoingMemos,
+    incomingMemos,
   }
 }
 
@@ -138,9 +165,17 @@ export function loadMemoRelations(db: Database, memoIds: string[]) {
   const goalsByMemo = new Map<string, MemoGoalRef[]>()
   const entriesByMemo = new Map<string, MemoEntryRef[]>()
   const hiddenByMemo = new Map<string, string[]>()
+  const outgoingByMemo = new Map<string, MemoRelationRef[]>()
+  const incomingByMemo = new Map<string, MemoRelationRef[]>()
 
   if (memoIds.length === 0) {
-    return { goalsByMemo, entriesByMemo, hiddenByMemo }
+    return {
+      goalsByMemo,
+      entriesByMemo,
+      hiddenByMemo,
+      outgoingByMemo,
+      incomingByMemo,
+    }
   }
 
   const goalRows = db
@@ -198,21 +233,124 @@ export function loadMemoRelations(db: Database, memoIds: string[]) {
     entriesByMemo.set(row.memoId, list)
   }
 
-  return { goalsByMemo, entriesByMemo, hiddenByMemo }
+  const outgoingRows = db
+    .select({
+      ownerId: memoRelations.sourceMemoId,
+      id: memos.id,
+      content: memos.content,
+      createdAt: memos.createdAt,
+    })
+    .from(memoRelations)
+    .innerJoin(memos, eq(memos.id, memoRelations.targetMemoId))
+    .where(and(
+      inArray(memoRelations.sourceMemoId, memoIds),
+      isNull(memos.deletedAt),
+    ))
+    .orderBy(asc(memoRelations.createdAt), asc(memos.id))
+    .all()
+
+  for (const row of outgoingRows) {
+    const list = outgoingByMemo.get(row.ownerId) ?? []
+    list.push(relationRef(row.id, row.content, row.createdAt))
+    outgoingByMemo.set(row.ownerId, list)
+  }
+
+  const incomingRows = db
+    .select({
+      ownerId: memoRelations.targetMemoId,
+      id: memos.id,
+      content: memos.content,
+      createdAt: memos.createdAt,
+    })
+    .from(memoRelations)
+    .innerJoin(memos, eq(memos.id, memoRelations.sourceMemoId))
+    .where(and(
+      inArray(memoRelations.targetMemoId, memoIds),
+      isNull(memos.deletedAt),
+    ))
+    .orderBy(asc(memoRelations.createdAt), asc(memos.id))
+    .all()
+
+  for (const row of incomingRows) {
+    const list = incomingByMemo.get(row.ownerId) ?? []
+    list.push(relationRef(row.id, row.content, row.createdAt))
+    incomingByMemo.set(row.ownerId, list)
+  }
+
+  return {
+    goalsByMemo,
+    entriesByMemo,
+    hiddenByMemo,
+    outgoingByMemo,
+    incomingByMemo,
+  }
+}
+
+/** 打卡反思后来收到的笔记回应。 */
+export function loadEntryReplies(
+  db: Database,
+  entryIds: string[],
+): Map<string, MemoRelationRef[]> {
+  const repliesByEntry = new Map<string, MemoRelationRef[]>()
+  if (entryIds.length === 0) return repliesByEntry
+
+  const rows = db
+    .select({
+      entryId: memoEntryLinks.entryId,
+      id: memos.id,
+      content: memos.content,
+      createdAt: memos.createdAt,
+    })
+    .from(memoEntryLinks)
+    .innerJoin(memos, eq(memos.id, memoEntryLinks.memoId))
+    .where(and(
+      inArray(memoEntryLinks.entryId, entryIds),
+      isNull(memos.deletedAt),
+    ))
+    .orderBy(asc(memoEntryLinks.createdAt), asc(memos.id))
+    .all()
+
+  for (const row of rows) {
+    const list = repliesByEntry.get(row.entryId) ?? []
+    list.push(relationRef(row.id, row.content, row.createdAt))
+    repliesByEntry.set(row.entryId, list)
+  }
+
+  return repliesByEntry
 }
 
 function buildMemos(db: Database, rows: MemoRow[]): Memo[] {
-  const { goalsByMemo, entriesByMemo, hiddenByMemo } = loadMemoRelations(
-    db,
-    rows.map(row => row.id),
-  )
+  const {
+    goalsByMemo,
+    entriesByMemo,
+    hiddenByMemo,
+    outgoingByMemo,
+    incomingByMemo,
+  } = loadMemoRelations(db, rows.map(row => row.id))
 
   return rows.map(row => toMemo(
     row,
     goalsByMemo.get(row.id) ?? [],
     entriesByMemo.get(row.id) ?? [],
     hiddenByMemo.get(row.id) ?? [],
+    outgoingByMemo.get(row.id) ?? [],
+    incomingByMemo.get(row.id) ?? [],
   ))
+}
+
+export function getMemosByIds(db: Database, ids: string[]): Memo[] {
+  if (ids.length === 0) return []
+
+  const rows = db
+    .select()
+    .from(memos)
+    .where(and(
+      inArray(memos.id, ids),
+      isNull(memos.deletedAt),
+    ))
+    .all()
+
+  return buildMemos(db, rows)
 }
 
 export function listMemos(db: Database, options: MemoListOptions): MemoPage {
@@ -341,9 +479,20 @@ export function listFeed(db: Database, options: MemoListOptions): FeedPage {
     .filter(row => row.kind === 'memo')
     .map(row => [row.id, row]))
 
-  const { goalsByMemo, entriesByMemo, hiddenByMemo } = loadMemoRelations(
+  const {
+    goalsByMemo,
+    entriesByMemo,
+    hiddenByMemo,
+    outgoingByMemo,
+    incomingByMemo,
+  } = loadMemoRelations(
     db,
     memoRows.map(row => row.id),
+  )
+
+  const repliesByEntry = loadEntryReplies(
+    db,
+    pageRows.filter(row => row.kind === 'daily_reflection').map(row => row.id),
   )
 
   const items = pageRows.map<FeedItem>((row) => {
@@ -358,6 +507,8 @@ export function listFeed(db: Database, options: MemoListOptions): FeedPage {
         goals: goalsByMemo.get(row.id) ?? [],
         entries: entriesByMemo.get(row.id) ?? [],
         hiddenEntryIds: hiddenByMemo.get(row.id) ?? [],
+        outgoingMemos: outgoingByMemo.get(row.id) ?? [],
+        incomingMemos: incomingByMemo.get(row.id) ?? [],
       }
     }
 
@@ -371,6 +522,7 @@ export function listFeed(db: Database, options: MemoListOptions): FeedPage {
       goalId: row.goal_id ?? '',
       goalTitle: row.goal_title ?? '',
       goalDeletedAt: row.goal_deleted_at,
+      replies: repliesByEntry.get(row.id) ?? [],
     }
   })
 
@@ -473,12 +625,20 @@ function insertLinks(
 
 export function createMemo(db: Database, input: MemoWriteInput): Memo {
   const goalIds = input.goalIds ?? []
-  const entryIds = input.entryIds ?? []
+  const entryIdSet = new Set(input.entryIds ?? [])
+  if (input.replyTo?.type === 'entry') entryIdSet.add(input.replyTo.id)
+  const entryIds = [...entryIdSet]
   const now = Math.floor(Date.now() / 1000)
 
   const memo = db.transaction((tx) => {
-    requireActiveGoalIds(tx as unknown as Database, goalIds)
-    requireActiveEntryIds(tx as unknown as Database, entryIds)
+    const database = tx as unknown as Database
+
+    requireActiveGoalIds(database, goalIds)
+    requireActiveEntryIds(
+      database,
+      entryIds.filter(id => !(input.replyTo?.type === 'entry' && id === input.replyTo.id)),
+    )
+    if (input.replyTo) requireReviewSource(database, input.replyTo)
 
     const [row] = tx
       .insert(memos)
@@ -496,7 +656,22 @@ export function createMemo(db: Database, input: MemoWriteInput): Memo {
       throw apiError(500, 'MEMO_SAVE_FAILED', '笔记没有保存成功')
     }
 
-    insertLinks(tx as unknown as Database, row.id, goalIds, entryIds, now)
+    insertLinks(database, row.id, goalIds, entryIds, now)
+
+    if (input.replyTo?.type === 'memo') {
+      tx.insert(memoRelations)
+        .values({
+          sourceMemoId: row.id,
+          targetMemoId: input.replyTo.id,
+          createdAt: now,
+        })
+        .run()
+    }
+
+    if (input.replyTo) {
+      markReviewRead(database, input.replyTo, now)
+    }
+
     return row
   })
 
