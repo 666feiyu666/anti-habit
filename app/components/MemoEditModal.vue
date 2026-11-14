@@ -27,31 +27,28 @@ function handleSaved(memo: Memo) {
 </script>
 
 <template>
-  <UModal
-    v-model:open="open"
+  <AppModal
+    :open="open"
     :title="title"
     description="正文和关联一起保存；只要有一处无效，整次修改都不会生效。"
-    :transition="false"
-    scrollable
-    :ui="{ content: 'modal-panel bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
+    size="lg"
+    @update:open="open = $event"
   >
-    <template #body>
-      <MemoForm
-        v-if="memo"
-        :key="memo.id"
-        mode="edit"
-        :memo-id="memo.id"
-        :goals="goals"
-        :initial-content="memo.content"
-        :initial-goal-ids="memo.goals.map(goal => goal.id)"
-        :initial-entry-ids="[...memo.entries.map(entry => entry.id), ...memo.hiddenEntryIds]"
-        :linked-goal-refs="memo.goals"
-        :draft-key="`memo:${memo.id}`"
-        submit-label="保存修改"
-        :show-heading="false"
-        @saved="handleSaved"
-        @cancel="emit('cancel')"
-      />
-    </template>
-  </UModal>
+    <MemoForm
+      v-if="memo"
+      :key="memo.id"
+      mode="edit"
+      :memo-id="memo.id"
+      :goals="goals"
+      :initial-content="memo.content"
+      :initial-goal-ids="memo.goals.map(goal => goal.id)"
+      :initial-entry-ids="[...memo.entries.map(entry => entry.id), ...memo.hiddenEntryIds]"
+      :linked-goal-refs="memo.goals"
+      :draft-key="`memo:${memo.id}`"
+      submit-label="保存修改"
+      :show-heading="false"
+      @saved="handleSaved"
+      @cancel="emit('cancel')"
+    />
+  </AppModal>
 </template>

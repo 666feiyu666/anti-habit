@@ -294,7 +294,7 @@ onMounted(() => {
 
       <div
         v-if="replyContext"
-        class="flex flex-wrap items-start justify-between gap-3 rounded-sm border-l-2 border-l-brass/70 bg-brass-soft/25 px-3 py-2.5"
+        class="flex flex-wrap items-start justify-between gap-3 rounded-sm border-l border-l-brass/70 bg-brass-soft/25 px-3 py-2.5"
       >
         <div class="min-w-0">
           <p class="flex items-center gap-1.5 text-xs font-medium text-brass-ink">

@@ -21,6 +21,18 @@ const reflectionHelpId = computed(() => `reflection-help-${props.idPrefix}`)
 const mode = ref<'write' | 'preview'>('write')
 const renderedReflection = computed(() => renderMarkdown(reflection.value))
 
+const modeOptions: Array<{ value: 'write' | 'preview', label: string }> = [
+  { value: 'write', label: '写作' },
+  { value: 'preview', label: '预览' },
+]
+
+const modeModel = computed<string>({
+  get: () => mode.value,
+  set: (value) => {
+    mode.value = value === 'preview' ? 'preview' : 'write'
+  },
+})
+
 function statusClasses(value: EntryStatus): string {
   if (status.value === value) {
     return value === 'completed'
@@ -82,28 +94,12 @@ function statusClasses(value: EntryStatus): string {
       </p>
 
       <div class="mt-2 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-0.5 rounded-md border border-rule p-0.5" role="group" aria-label="正文显示方式">
-          <button
-            type="button"
-            class="rounded-sm px-2.5 py-1 text-xs transition-colors motion-reduce:transition-none"
-            :class="mode === 'write' ? 'bg-paper text-ink' : 'text-ink-faint hover:text-ink'"
-            :aria-pressed="mode === 'write'"
-            :disabled="busy"
-            @click="mode = 'write'"
-          >
-            写作
-          </button>
-          <button
-            type="button"
-            class="rounded-sm px-2.5 py-1 text-xs transition-colors motion-reduce:transition-none"
-            :class="mode === 'preview' ? 'bg-paper text-ink' : 'text-ink-faint hover:text-ink'"
-            :aria-pressed="mode === 'preview'"
-            :disabled="busy"
-            @click="mode = 'preview'"
-          >
-            预览
-          </button>
-        </div>
+        <SegmentedControl
+          v-model="modeModel"
+          :options="modeOptions"
+          label="正文显示方式"
+          :disabled="busy"
+        />
         <span class="text-xs text-ink-faint">支持 Markdown</span>
       </div>
 

@@ -25,6 +25,11 @@ const emit = defineEmits<{
 const toast = useToast()
 const view = ref<'essay' | 'materials'>('essay')
 
+const viewOptions = computed(() => [
+  { value: 'essay' as const, label: '随笔' },
+  { value: 'materials' as const, label: '材料', count: materials.value.length || undefined },
+])
+
 const fileInput = ref<HTMLInputElement | null>(null)
 const materials = ref<GoalMaterialSummary[]>([])
 const materialsPending = ref(false)
@@ -123,6 +128,10 @@ function setView(next: 'essay' | 'materials') {
     materialError.value = ''
   }
   view.value = next
+}
+
+function handleViewChange(value: string) {
+  if (value === 'essay' || value === 'materials') setView(value)
 }
 
 function pickFile() {
@@ -305,365 +314,333 @@ function handleOpenChange(value: boolean) {
 </script>
 
 <template>
-  <UModal
+  <AppModal
     :open="open"
     :title="essayTitle"
     :description="goal?.title"
-    :transition="false"
-    scrollable
-    :ui="{
-      content: 'modal-panel bg-sheet sm:max-w-3xl',
-      header: 'border-b border-rule',
-      title: 'font-serif text-2xl text-ink',
-      description: 'text-sm text-ink-soft',
-      body: 'py-5',
-      footer: 'border-t border-rule',
-    }"
+    size="xl"
     @update:open="handleOpenChange"
   >
-    <template #body>
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div
-          class="flex items-center gap-0.5 rounded-md border border-rule bg-paper/50 p-0.5"
-          role="tablist"
-          aria-label="阅读视图"
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <SegmentedControl
+        :model-value="view"
+        :options="viewOptions"
+        label="阅读视图"
+        @update:model-value="handleViewChange"
+      />
+
+      <div v-if="view === 'essay'" class="flex items-center gap-2">
+        <UButton
+          label="导出 Markdown"
+          icon="i-lucide-download"
+          size="sm"
+          color="neutral"
+          variant="outline"
+          :disabled="!goal || !entries.length"
+          @click="exportMarkdown"
+        />
+      </div>
+
+      <div v-else class="flex items-center gap-2">
+        <input
+          ref="fileInput"
+          type="file"
+          accept=".md,.markdown,text/markdown"
+          class="sr-only"
+          :disabled="!goal || importing"
+          @change="handleFile"
         >
-          <button
-            type="button"
-            role="tab"
-            class="rounded-sm px-3 py-1.5 text-xs font-medium transition-colors motion-reduce:transition-none"
-            :class="view === 'essay' ? 'bg-sheet text-ink shadow-sm' : 'text-ink-faint hover:text-ink'"
-            :aria-selected="view === 'essay'"
-            @click="setView('essay')"
+        <UButton
+          label="导入 Markdown"
+          icon="i-lucide-upload"
+          size="sm"
+          color="neutral"
+          variant="outline"
+          :loading="importing"
+          :disabled="!goal || importing"
+          @click="pickFile"
+        />
+      </div>
+    </div>
+
+    <template v-if="view === 'essay'">
+      <p class="mt-3 text-xs leading-5 text-ink-faint">
+        点日期或回应链接，回到那一天。
+      </p>
+
+      <div v-if="pending" class="mt-6 space-y-6" aria-busy="true" aria-label="正在读取随笔">
+        <div v-for="index in 3" :key="index" class="border-t border-rule pt-5">
+          <div class="h-5 w-40 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
+          <div class="mt-3 h-3 w-full animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+          <div class="mt-2 h-3 w-4/5 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+        </div>
+      </div>
+
+      <UAlert
+        v-else-if="error"
+        color="error"
+        variant="soft"
+        title="没能读到这本随笔"
+        :description="error"
+        class="mt-6"
+      />
+
+      <div v-else-if="!entries.length" class="py-16">
+        <p class="font-serif text-xl text-ink">
+          还没有正文
+        </p>
+        <p class="mt-2 text-sm leading-6 text-ink-soft">
+          下一次打卡时，可以从一句话开始。
+        </p>
+      </div>
+
+      <ol v-else class="timeline mt-2">
+        <li
+          v-for="item in entries"
+          :key="item.entry.id"
+          :data-status="item.entry.status"
+          class="timeline-item py-7 first:pt-5"
+        >
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <button
+              type="button"
+              class="font-serif text-xl text-ink hover:text-done hover:underline hover:underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
+              @click="emit('selectDate', item.entry.entryDate)"
+            >
+              {{ formatFullDayLabel(item.entry.entryDate) }}
+            </button>
+            <span class="inline-flex items-center gap-2 rounded-sm bg-paper/70 px-2 py-1 text-xs text-ink-soft">
+              <span
+                class="size-2 rounded-[2px]"
+                :class="statusDot[item.entry.status]"
+                aria-hidden="true"
+              />
+              {{ statusLabel[item.entry.status] }}
+            </span>
+          </div>
+
+          <div
+            class="essay-markdown mt-3 max-w-[62ch]"
+            v-html="renderMarkdown(item.entry.reflection ?? '')"
+          />
+
+          <div
+            v-if="item.outgoing.length"
+            class="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-ink-soft"
           >
-            随笔
-          </button>
-          <button
-            type="button"
-            role="tab"
-            class="rounded-sm px-3 py-1.5 text-xs font-medium transition-colors motion-reduce:transition-none"
-            :class="view === 'materials' ? 'bg-sheet text-ink shadow-sm' : 'text-ink-faint hover:text-ink'"
-            :aria-selected="view === 'materials'"
-            @click="setView('materials')"
+            <span class="text-ink-faint">回应</span>
+            <button
+              v-for="reference in item.outgoing"
+              :key="reference.entryId"
+              type="button"
+              class="rounded-sm border border-rule bg-paper/50 px-1.5 py-0.5 text-done transition-colors hover:border-done/40 hover:bg-done-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+              @click="emit('selectDate', reference.entryDate)"
+            >
+              {{ formatDayLabel(reference.entryDate) }}
+            </button>
+          </div>
+
+          <div
+            v-if="item.incoming.length"
+            class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-soft"
           >
-            材料
-            <span v-if="materials.length" class="ml-0.5 text-ink-faint">{{ materials.length }}</span>
-          </button>
+            <span class="text-ink-faint">后来被</span>
+            <button
+              v-for="reference in item.incoming"
+              :key="reference.entryId"
+              type="button"
+              class="rounded-sm border border-rule bg-paper/50 px-1.5 py-0.5 text-done transition-colors hover:border-done/40 hover:bg-done-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
+              @click="emit('selectDate', reference.entryDate)"
+            >
+              {{ formatDayLabel(reference.entryDate) }}
+            </button>
+            <span class="text-ink-faint">继续</span>
+          </div>
+        </li>
+      </ol>
+    </template>
+
+    <template v-else>
+      <p class="mt-3 text-xs leading-5 text-ink-faint">
+        导入的 Markdown 会作为这本书的写作材料保存，不会改动每日记录。
+      </p>
+
+      <UAlert
+        v-if="materialsError"
+        color="error"
+        variant="soft"
+        title="材料操作失败"
+        :description="materialsError"
+        class="mt-4"
+      />
+
+      <div v-if="activeMaterial" class="mt-5">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-rule pb-3">
+          <UButton
+            label="返回列表"
+            icon="i-lucide-chevron-left"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            @click="backToMaterials"
+          />
+          <div v-if="!materialEditing" class="flex items-center gap-1">
+            <UButton
+              label="编辑"
+              icon="i-lucide-pencil"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              @click="startEditing"
+            />
+            <UButton
+              label="删除"
+              icon="i-lucide-trash-2"
+              color="error"
+              variant="ghost"
+              size="sm"
+              :loading="materialDeleting"
+              @click="deleteMaterial(activeMaterial)"
+            />
+          </div>
         </div>
 
-        <div v-if="view === 'essay'" class="flex items-center gap-2">
-          <UButton
-            label="导出 Markdown"
-            icon="i-lucide-download"
-            size="sm"
-            color="neutral"
-            variant="outline"
-            :disabled="!goal || !entries.length"
-            @click="exportMarkdown"
+        <div v-if="materialEditing" class="mt-4">
+          <label for="material-title" class="text-sm font-medium text-ink">材料标题</label>
+          <input
+            id="material-title"
+            v-model="draftTitle"
+            type="text"
+            :maxlength="MATERIAL_TITLE_MAX_LENGTH"
+            :disabled="materialSaving"
+            class="mt-2 w-full rounded-md border border-rule bg-sheet px-3 py-2 font-serif text-lg text-ink focus:border-done focus:outline-none focus:ring-2 focus:ring-done/15 disabled:opacity-60"
+          >
+
+          <div class="mt-4 flex items-baseline justify-between gap-3">
+            <label for="material-content" class="text-sm font-medium text-ink">正文</label>
+            <span class="text-xs tabular-nums text-ink-faint">
+              {{ draftContent.length }}/{{ MATERIAL_CONTENT_MAX_LENGTH }}
+            </span>
+          </div>
+          <textarea
+            id="material-content"
+            v-model="draftContent"
+            :maxlength="MATERIAL_CONTENT_MAX_LENGTH"
+            :disabled="materialSaving"
+            rows="18"
+            class="mt-2 min-h-96 w-full resize-y rounded-md border border-rule bg-sheet px-3 py-2.5 font-mono text-sm leading-6 text-ink focus:border-done focus:outline-none focus:ring-2 focus:ring-done/15 disabled:opacity-60"
+          />
+
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <span class="text-xs text-ink-faint">
+              {{ materialDirty ? '有未保存的修改' : '没有修改' }}
+            </span>
+            <div class="flex gap-2">
+              <UButton
+                label="取消"
+                color="neutral"
+                variant="ghost"
+                :disabled="materialSaving"
+                @click="cancelEditing"
+              />
+              <UButton
+                label="保存"
+                :loading="materialSaving"
+                :disabled="!materialDirty"
+                @click="saveMaterial"
+              />
+            </div>
+          </div>
+
+          <UAlert
+            v-if="materialError"
+            color="error"
+            variant="soft"
+            title="没能保存材料"
+            :description="materialError"
+            class="mt-4"
           />
         </div>
 
-        <div v-else class="flex items-center gap-2">
-          <input
-            ref="fileInput"
-            type="file"
-            accept=".md,.markdown,text/markdown"
-            class="sr-only"
-            :disabled="!goal || importing"
-            @change="handleFile"
-          >
-          <UButton
-            label="导入 Markdown"
-            icon="i-lucide-upload"
-            size="sm"
-            color="neutral"
-            variant="outline"
-            :loading="importing"
-            :disabled="!goal || importing"
-            @click="pickFile"
+        <div v-else class="mt-5">
+          <h3 class="font-serif text-2xl leading-8 text-ink">
+            {{ activeMaterial.title }}
+          </h3>
+          <p class="mt-1 text-xs text-ink-faint">
+            {{ activeMaterial.sourceName || '未记录文件名' }}
+            · {{ formatCount(activeMaterial.content.length) }}
+            · 更新于 {{ formatTimestamp(activeMaterial.updatedAt) }}
+          </p>
+          <div
+            class="essay-markdown mt-5"
+            v-html="renderMarkdown(activeMaterial.content)"
           />
         </div>
       </div>
 
-      <template v-if="view === 'essay'">
-        <p class="mt-3 text-xs leading-5 text-ink-faint">
-          点日期或回应链接，回到那一天。
+      <div v-else-if="materialPending" class="mt-6" aria-busy="true" aria-label="正在读取材料">
+        <div class="h-6 w-48 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
+        <div class="mt-4 h-3 w-full animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+        <div class="mt-2 h-3 w-5/6 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+      </div>
+
+      <div v-else-if="materialsPending" class="mt-6" aria-busy="true" aria-label="正在读取材料列表">
+        <div v-for="index in 3" :key="index" class="border-t border-rule py-4 first:border-t-0">
+          <div class="h-5 w-52 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
+          <div class="mt-2 h-3 w-32 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+        </div>
+      </div>
+
+      <div v-else-if="!materials.length" class="py-16 text-center">
+        <div class="mx-auto flex size-12 items-center justify-center rounded-full border border-rule bg-paper/60">
+          <UIcon name="i-lucide-file-text" class="size-5 text-ink-faint" aria-hidden="true" />
+        </div>
+        <p class="mt-4 font-serif text-xl text-ink">
+          还没有材料
         </p>
+        <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">
+          导入一份 Markdown，作为这本书的写作材料。
+        </p>
+      </div>
 
-        <div v-if="pending" class="mt-6 space-y-6" aria-busy="true" aria-label="正在读取随笔">
-          <div v-for="index in 3" :key="index" class="border-t border-rule pt-5">
-            <div class="h-5 w-40 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
-            <div class="mt-3 h-3 w-full animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
-            <div class="mt-2 h-3 w-4/5 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
-          </div>
-        </div>
-
-        <UAlert
-          v-else-if="error"
-          color="error"
-          variant="soft"
-          title="没能读到这本随笔"
-          :description="error"
-          class="mt-6"
-        />
-
-        <div v-else-if="!entries.length" class="py-16">
-          <p class="font-serif text-xl text-ink">
-            还没有正文
-          </p>
-          <p class="mt-2 text-sm leading-6 text-ink-soft">
-            下一次打卡时，可以从一句话开始。
-          </p>
-        </div>
-
-        <ol v-else class="timeline mt-2">
-          <li
-            v-for="item in entries"
-            :key="item.entry.id"
-            :data-status="item.entry.status"
-            class="timeline-item py-7 first:pt-5"
-          >
-            <div class="flex flex-wrap items-baseline justify-between gap-2">
-              <button
-                type="button"
-                class="font-serif text-xl text-ink hover:text-done hover:underline hover:underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
-                @click="emit('selectDate', item.entry.entryDate)"
-              >
-                {{ formatFullDayLabel(item.entry.entryDate) }}
-              </button>
-              <span class="inline-flex items-center gap-2 rounded-sm bg-paper/70 px-2 py-1 text-xs text-ink-soft">
-                <span
-                  class="size-2 rounded-[2px]"
-                  :class="statusDot[item.entry.status]"
-                  aria-hidden="true"
-                />
-                {{ statusLabel[item.entry.status] }}
+      <ul v-else class="mt-2">
+        <li
+          v-for="material in materials"
+          :key="material.id"
+          class="group border-t border-rule py-4 first:border-t-0"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <button
+              type="button"
+              class="flex min-w-0 items-start gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
+              @click="openMaterial(material)"
+            >
+              <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-sm border border-rule bg-paper/60 text-ink-faint transition-colors group-hover:border-brass/40 group-hover:bg-brass-soft/40 group-hover:text-brass-deep">
+                <UIcon name="i-lucide-file-text" class="size-4" aria-hidden="true" />
               </span>
-            </div>
-
-            <div
-              class="essay-markdown mt-3 max-w-[62ch]"
-              v-html="renderMarkdown(item.entry.reflection ?? '')"
-            />
-
-            <div
-              v-if="item.outgoing.length"
-              class="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-ink-soft"
-            >
-              <span class="text-ink-faint">回应</span>
-              <button
-                v-for="reference in item.outgoing"
-                :key="reference.entryId"
-                type="button"
-                class="rounded-sm border border-rule bg-paper/50 px-1.5 py-0.5 text-done transition-colors hover:border-done/40 hover:bg-done-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
-                @click="emit('selectDate', reference.entryDate)"
-              >
-                {{ formatDayLabel(reference.entryDate) }}
-              </button>
-            </div>
-
-            <div
-              v-if="item.incoming.length"
-              class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-soft"
-            >
-              <span class="text-ink-faint">后来被</span>
-              <button
-                v-for="reference in item.incoming"
-                :key="reference.entryId"
-                type="button"
-                class="rounded-sm border border-rule bg-paper/50 px-1.5 py-0.5 text-done transition-colors hover:border-done/40 hover:bg-done-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done"
-                @click="emit('selectDate', reference.entryDate)"
-              >
-                {{ formatDayLabel(reference.entryDate) }}
-              </button>
-              <span class="text-ink-faint">继续</span>
-            </div>
-          </li>
-        </ol>
-      </template>
-
-      <template v-else>
-        <p class="mt-3 text-xs leading-5 text-ink-faint">
-          导入的 Markdown 会作为这本书的写作材料保存，不会改动每日记录。
-        </p>
-
-        <UAlert
-          v-if="materialsError"
-          color="error"
-          variant="soft"
-          title="材料操作失败"
-          :description="materialsError"
-          class="mt-4"
-        />
-
-        <div v-if="activeMaterial" class="mt-5">
-          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-rule pb-3">
+              <span class="min-w-0">
+                <span class="block truncate font-serif text-lg text-ink transition-colors group-hover:text-done">
+                  {{ material.title }}
+                </span>
+                <span class="mt-1 block truncate text-xs text-ink-faint">
+                  {{ material.sourceName || '未记录文件名' }}
+                  · {{ formatCount(material.characterCount) }}
+                  · 导入于 {{ formatTimestamp(material.createdAt) }}
+                </span>
+              </span>
+            </button>
             <UButton
-              label="返回列表"
-              icon="i-lucide-chevron-left"
-              color="neutral"
+              label="删除"
+              icon="i-lucide-trash-2"
+              color="error"
               variant="ghost"
               size="sm"
-              @click="backToMaterials"
-            />
-            <div v-if="!materialEditing" class="flex items-center gap-1">
-              <UButton
-                label="编辑"
-                icon="i-lucide-pencil"
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                @click="startEditing"
-              />
-              <UButton
-                label="删除"
-                icon="i-lucide-trash-2"
-                color="error"
-                variant="ghost"
-                size="sm"
-                :loading="materialDeleting"
-                @click="deleteMaterial(activeMaterial)"
-              />
-            </div>
-          </div>
-
-          <div v-if="materialEditing" class="mt-4">
-            <label for="material-title" class="text-sm font-medium text-ink">材料标题</label>
-            <input
-              id="material-title"
-              v-model="draftTitle"
-              type="text"
-              :maxlength="MATERIAL_TITLE_MAX_LENGTH"
-              :disabled="materialSaving"
-              class="mt-2 w-full rounded-md border border-rule bg-sheet px-3 py-2 font-serif text-lg text-ink focus:border-done focus:outline-none focus:ring-2 focus:ring-done/15 disabled:opacity-60"
-            >
-
-            <div class="mt-4 flex items-baseline justify-between gap-3">
-              <label for="material-content" class="text-sm font-medium text-ink">正文</label>
-              <span class="text-xs tabular-nums text-ink-faint">
-                {{ draftContent.length }}/{{ MATERIAL_CONTENT_MAX_LENGTH }}
-              </span>
-            </div>
-            <textarea
-              id="material-content"
-              v-model="draftContent"
-              :maxlength="MATERIAL_CONTENT_MAX_LENGTH"
-              :disabled="materialSaving"
-              rows="18"
-              class="mt-2 min-h-96 w-full resize-y rounded-md border border-rule bg-sheet px-3 py-2.5 font-mono text-sm leading-6 text-ink focus:border-done focus:outline-none focus:ring-2 focus:ring-done/15 disabled:opacity-60"
-            />
-
-            <div class="mt-3 flex items-center justify-between gap-3">
-              <span class="text-xs text-ink-faint">
-                {{ materialDirty ? '有未保存的修改' : '没有修改' }}
-              </span>
-              <div class="flex gap-2">
-                <UButton
-                  label="取消"
-                  color="neutral"
-                  variant="ghost"
-                  :disabled="materialSaving"
-                  @click="cancelEditing"
-                />
-                <UButton
-                  label="保存"
-                  :loading="materialSaving"
-                  :disabled="!materialDirty"
-                  @click="saveMaterial"
-                />
-              </div>
-            </div>
-
-            <UAlert
-              v-if="materialError"
-              color="error"
-              variant="soft"
-              title="没能保存材料"
-              :description="materialError"
-              class="mt-4"
+              :disabled="importing"
+              @click="deleteMaterial(material)"
             />
           </div>
-
-          <div v-else class="mt-5">
-            <h3 class="font-serif text-2xl leading-8 text-ink">
-              {{ activeMaterial.title }}
-            </h3>
-            <p class="mt-1 text-xs text-ink-faint">
-              {{ activeMaterial.sourceName || '未记录文件名' }}
-              · {{ formatCount(activeMaterial.content.length) }}
-              · 更新于 {{ formatTimestamp(activeMaterial.updatedAt) }}
-            </p>
-            <div
-              class="essay-markdown mt-5"
-              v-html="renderMarkdown(activeMaterial.content)"
-            />
-          </div>
-        </div>
-
-        <div v-else-if="materialPending" class="mt-6" aria-busy="true" aria-label="正在读取材料">
-          <div class="h-6 w-48 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
-          <div class="mt-4 h-3 w-full animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
-          <div class="mt-2 h-3 w-5/6 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
-        </div>
-
-        <div v-else-if="materialsPending" class="mt-6" aria-busy="true" aria-label="正在读取材料列表">
-          <div v-for="index in 3" :key="index" class="border-t border-rule py-4 first:border-t-0">
-            <div class="h-5 w-52 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
-            <div class="mt-2 h-3 w-32 animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
-          </div>
-        </div>
-
-        <div v-else-if="!materials.length" class="py-16 text-center">
-          <div class="mx-auto flex size-12 items-center justify-center rounded-full border border-rule bg-paper/60">
-            <UIcon name="i-lucide-file-text" class="size-5 text-ink-faint" aria-hidden="true" />
-          </div>
-          <p class="mt-4 font-serif text-xl text-ink">
-            还没有材料
-          </p>
-          <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">
-            导入一份 Markdown，作为这本书的写作材料。
-          </p>
-        </div>
-
-        <ul v-else class="mt-2">
-          <li
-            v-for="material in materials"
-            :key="material.id"
-            class="group border-t border-rule py-4 first:border-t-0"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <button
-                type="button"
-                class="flex min-w-0 items-start gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
-                @click="openMaterial(material)"
-              >
-                <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-sm border border-rule bg-paper/60 text-ink-faint transition-colors group-hover:border-brass/40 group-hover:bg-brass-soft/40 group-hover:text-brass-deep">
-                  <UIcon name="i-lucide-file-text" class="size-4" aria-hidden="true" />
-                </span>
-                <span class="min-w-0">
-                  <span class="block truncate font-serif text-lg text-ink transition-colors group-hover:text-done">
-                    {{ material.title }}
-                  </span>
-                  <span class="mt-1 block truncate text-xs text-ink-faint">
-                    {{ material.sourceName || '未记录文件名' }}
-                    · {{ formatCount(material.characterCount) }}
-                    · 导入于 {{ formatTimestamp(material.createdAt) }}
-                  </span>
-                </span>
-              </button>
-              <UButton
-                label="删除"
-                icon="i-lucide-trash-2"
-                color="error"
-                variant="ghost"
-                size="sm"
-                :disabled="importing"
-                @click="deleteMaterial(material)"
-              />
-            </div>
-          </li>
-        </ul>
-      </template>
+        </li>
+      </ul>
     </template>
 
     <template #footer>
@@ -676,5 +653,5 @@ function handleOpenChange(value: boolean) {
         />
       </div>
     </template>
-  </UModal>
+  </AppModal>
 </template>

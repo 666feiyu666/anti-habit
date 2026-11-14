@@ -12,7 +12,7 @@ import type {
 } from '#shared/types'
 import { getDayAppearance } from '#shared/utils/day-appearance'
 import { todayDateOnly } from '#shared/utils/date'
-import { formatDateKey, formatDayLabel, formatFullDayLabel, formatWeekday } from '~/utils/date-display'
+import { formatDateKey, formatDayLabel, formatFullDayLabel } from '~/utils/date-display'
 import { dayStatusDot, dayStatusLabel } from '~/utils/day-display'
 import { markdownExcerpt } from '~/utils/markdown'
 
@@ -23,7 +23,7 @@ const router = useRouter()
 const toast = useToast()
 
 const today = ref(todayDateOnly())
-const todayLabel = computed(() => `${formatFullDayLabel(today.value)}，${formatWeekday(today.value)}`)
+const todayLabel = computed(() => formatFullDayLabel(today.value))
 
 const { data: goalsData, pending: goalsPending, error: goalsError } = await useFetch<{
   goals: GoalSummary[]
@@ -142,6 +142,13 @@ const searchQuery = ref(initialSearch.trim())
 const linkedFilter = ref<FeedLinkedFilter>(
   initialLinked === 'linked' || initialLinked === 'unlinked' ? initialLinked : 'all',
 )
+
+const linkedFilterModel = computed<string>({
+  get: () => linkedFilter.value,
+  set: (value) => {
+    linkedFilter.value = value === 'linked' || value === 'unlinked' ? value : 'all'
+  },
+})
 const goalFilter = ref(initialGoalFilter)
 const hasFilters = computed(
   () => Boolean(searchQuery.value || goalFilter.value || linkedFilter.value !== 'all'),
@@ -500,23 +507,9 @@ watch(() => route.fullPath, () => {
 <template>
   <div class="min-h-dvh">
     <main class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-6 lg:px-10 lg:py-10">
-      <header class="reveal flex flex-wrap items-center justify-between gap-4 border-b border-rule pb-5">
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <NuxtLink
-            to="/"
-            class="font-serif text-[1.6rem] leading-none tracking-tight text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
-          >
-            Anti-Habit
-          </NuxtLink>
-          <SiteNav active="notes" />
-        </div>
-        <p class="hidden items-center gap-2 text-sm text-ink-soft sm:flex">
-          <span class="inline-block h-px w-6 bg-brass/70" aria-hidden="true" />
-          {{ todayLabel }}
-        </p>
-      </header>
+      <SiteHeader active="notes" :today-label="todayLabel" />
 
-      <div class="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-12">
+      <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-12">
         <section class="min-w-0" aria-labelledby="composer-heading">
           <div class="paper-stack paper-card relative rounded-sm p-4 sm:p-6">
             <h1 id="composer-heading" class="sr-only">写一则笔记</h1>
@@ -598,25 +591,11 @@ watch(() => route.fullPath, () => {
               </label>
 
               <div class="flex flex-wrap items-center gap-2">
-                <div
-                  class="flex items-center gap-0.5 rounded-md border border-rule bg-sheet p-0.5"
-                  role="group"
-                  aria-label="关联状态"
-                >
-                  <button
-                    v-for="option in linkedOptions"
-                    :key="option.value"
-                    type="button"
-                    class="rounded-sm px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-done motion-reduce:transition-none"
-                    :class="linkedFilter === option.value
-                      ? 'bg-paper text-ink'
-                      : 'text-ink-faint hover:text-ink'"
-                    :aria-pressed="linkedFilter === option.value"
-                    @click="linkedFilter = option.value"
-                  >
-                    {{ option.label }}
-                  </button>
-                </div>
+                <SegmentedControl
+                  v-model="linkedFilterModel"
+                  :options="linkedOptions"
+                  label="关联状态"
+                />
 
                 <label class="sr-only" for="goal-filter">按习惯筛选</label>
                 <select

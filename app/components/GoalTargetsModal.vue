@@ -32,6 +32,18 @@ const formHint = computed(() => formType.value === 'streak'
   ? '按历史最长的连续天数判定达成；今天还没记录时，当前连续不会立刻清零。'
   : '按从目标创建日起累计的完成天数判定，任何一天完成都算。')
 
+const typeOptions: Array<{ value: GoalTargetType, label: string }> = [
+  { value: 'streak', label: '连续' },
+  { value: 'cumulative', label: '累积' },
+]
+
+const formTypeModel = computed<string>({
+  get: () => formType.value,
+  set: (value) => {
+    formType.value = value === 'cumulative' ? 'cumulative' : 'streak'
+  },
+})
+
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
   month: 'long',
@@ -221,292 +233,266 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
 </script>
 
 <template>
-  <UModal
+  <AppModal
     :open="open"
     title="目标进度"
     :description="goal?.title"
-    :transition="false"
-    scrollable
-    :ui="{
-      content: 'modal-panel bg-sheet sm:max-w-2xl',
-      header: 'border-b border-rule',
-      title: 'font-serif text-2xl text-ink',
-      description: 'text-sm text-ink-soft',
-      body: 'py-5',
-      footer: 'border-t border-rule',
-    }"
+    size="lg"
     @update:open="emit('update:open', $event)"
   >
-    <template #body>
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="max-w-md text-xs leading-5 text-ink-faint">
-          一个目标可以设多个目标设定，每项从创建当天开始计算。
-        </p>
-        <UButton
-          label="新增目标设定"
-          icon="i-lucide-plus"
-          size="sm"
-          :disabled="!goal || saving"
-          @click="openCreate"
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p class="max-w-md text-xs leading-5 text-ink-faint">
+        一个目标可以设多个目标设定，每项从创建当天开始计算。
+      </p>
+      <UButton
+        label="新增目标设定"
+        icon="i-lucide-plus"
+        size="sm"
+        :disabled="!goal || saving"
+        @click="openCreate"
+      />
+    </div>
+
+    <div v-if="formOpen" class="reveal mt-4 rounded-sm border border-rule bg-paper/60 p-4">
+      <p class="text-sm font-medium text-ink">
+        {{ editingId ? '编辑目标设定' : '新增目标设定' }}
+      </p>
+
+      <div class="mt-4">
+        <p class="text-sm font-medium text-ink">计算方式</p>
+        <SegmentedControl
+          v-model="formTypeModel"
+          class="mt-2"
+          :options="typeOptions"
+          label="计算方式"
+          :disabled="saving"
         />
       </div>
 
-      <div v-if="formOpen" class="reveal mt-4 border border-rule bg-paper/60 p-4">
-        <p class="text-sm font-medium text-ink">
-          {{ editingId ? '编辑目标设定' : '新增目标设定' }}
-        </p>
-
-        <div class="mt-3">
-          <p class="text-xs font-medium text-ink-soft">计算方式</p>
-          <div class="mt-1.5 flex items-center gap-0.5 rounded-md border border-rule p-0.5" role="group" aria-label="计算方式">
-            <button
-              type="button"
-              class="flex-1 rounded-sm px-3 py-1.5 text-xs transition-colors motion-reduce:transition-none"
-              :class="formType === 'streak' ? 'bg-sheet text-ink' : 'text-ink-faint hover:text-ink'"
-              :aria-pressed="formType === 'streak'"
-              :disabled="saving"
-              @click="formType = 'streak'"
-            >
-              连续
-            </button>
-            <button
-              type="button"
-              class="flex-1 rounded-sm px-3 py-1.5 text-xs transition-colors motion-reduce:transition-none"
-              :class="formType === 'cumulative' ? 'bg-sheet text-ink' : 'text-ink-faint hover:text-ink'"
-              :aria-pressed="formType === 'cumulative'"
-              :disabled="saving"
-              @click="formType = 'cumulative'"
-            >
-              累积
-            </button>
-          </div>
+      <div class="mt-4">
+        <label for="goal-target-count" class="text-sm font-medium text-ink">
+          目标天数
+        </label>
+        <div class="mt-2 flex items-center gap-2">
+          <UInput
+            id="goal-target-count"
+            v-model.number="formCount"
+            type="number"
+            :min="GOAL_TARGET_COUNT_MIN"
+            :max="GOAL_TARGET_COUNT_MAX"
+            :disabled="saving"
+            class="w-32"
+          />
+          <span class="text-sm text-ink-soft">天</span>
         </div>
+      </div>
 
-        <div class="mt-3">
-          <label for="goal-target-count" class="text-xs font-medium text-ink-soft">
-            目标天数
+      <div class="mt-4">
+        <div class="flex items-baseline justify-between gap-3">
+          <label for="goal-target-reward" class="text-sm font-medium text-ink">
+            奖励
+            <span class="font-normal text-ink-faint">选填</span>
           </label>
-          <div class="mt-1.5 flex items-center gap-2">
-            <UInput
-              id="goal-target-count"
-              v-model.number="formCount"
-              type="number"
-              :min="GOAL_TARGET_COUNT_MIN"
-              :max="GOAL_TARGET_COUNT_MAX"
-              :disabled="saving"
-              class="w-32"
-            />
-            <span class="text-sm text-ink-soft">天</span>
+          <span class="text-xs tabular-nums text-ink-faint">
+            {{ formReward.length }}/{{ GOAL_TARGET_REWARD_MAX_LENGTH }}
+          </span>
+        </div>
+        <p class="mt-1 text-xs leading-5 text-ink-faint">
+          达成后可以标记已领取。
+        </p>
+        <UTextarea
+          id="goal-target-reward"
+          v-model="formReward"
+          :maxlength="GOAL_TARGET_REWARD_MAX_LENGTH"
+          :rows="2"
+          :disabled="saving"
+          class="mt-2 w-full"
+          placeholder="例如：买一本喜欢的书"
+        />
+      </div>
+
+      <p class="mt-4 text-xs leading-5 text-ink-soft">
+        {{ formHint }}
+      </p>
+
+      <div class="mt-4 flex justify-end gap-2">
+        <UButton
+          label="取消"
+          color="neutral"
+          variant="ghost"
+          :disabled="saving"
+          @click="cancelForm"
+        />
+        <UButton
+          :label="editingId ? '保存' : '添加'"
+          :loading="saving"
+          @click="saveTarget"
+        />
+      </div>
+    </div>
+
+    <UAlert
+      v-if="error"
+      color="error"
+      variant="soft"
+      title="目标设定操作失败"
+      :description="error"
+      class="mt-4"
+    />
+
+    <div v-if="pending" class="mt-6 space-y-5" aria-busy="true" aria-label="正在读取目标设定">
+      <div v-for="index in 2" :key="index" class="border-t border-rule pt-5">
+        <div class="h-6 w-32 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
+        <div class="mt-3 h-2 w-full animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
+      </div>
+    </div>
+
+    <div v-else-if="!targets.length" class="py-14 text-center">
+      <div class="mx-auto flex size-12 items-center justify-center rounded-full border border-rule bg-paper/60">
+        <UIcon name="i-lucide-target" class="size-5 text-ink-faint" aria-hidden="true" />
+      </div>
+      <p class="mt-4 font-serif text-xl text-ink">
+        还没有目标设定
+      </p>
+      <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">
+        比如“连续 30 天”，或“累积 100 天”。
+      </p>
+    </div>
+
+    <ul v-else class="mt-2">
+      <li
+        v-for="target in targets"
+        :key="target.id"
+        class="border-t border-rule py-5 first:border-t-0 first:pt-4"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p class="text-xs text-ink-soft">
+              {{ typeLabel(target.type) }}
+            </p>
+            <p class="mt-0.5 font-serif text-2xl leading-8 text-ink">
+              {{ target.count }} 天
+            </p>
           </div>
+          <span
+            v-if="target.progress.achieved"
+            class="inline-flex items-center gap-1 rounded-sm bg-mist px-2 py-1 text-xs text-mist-ink"
+          >
+            <UIcon name="i-lucide-check" class="size-3" aria-hidden="true" />
+            已达成
+          </span>
         </div>
 
-        <div class="mt-3">
-          <div class="flex items-baseline justify-between gap-3">
-            <label for="goal-target-reward" class="text-xs font-medium text-ink-soft">
-              奖励
-              <span class="font-normal text-ink-faint">选填</span>
-            </label>
-            <span class="text-xs tabular-nums text-ink-faint">
-              {{ formReward.length }}/{{ GOAL_TARGET_REWARD_MAX_LENGTH }}
-            </span>
-          </div>
-          <p class="mt-1 text-xs leading-5 text-ink-faint">
-            达成后可以标记已领取。
-          </p>
-          <UTextarea
-            id="goal-target-reward"
-            v-model="formReward"
-            :maxlength="GOAL_TARGET_REWARD_MAX_LENGTH"
-            :rows="2"
-            :disabled="saving"
-            class="mt-2 w-full"
-            placeholder="例如：买一本喜欢的书"
-          />
-        </div>
-
-        <p class="mt-3 text-xs leading-5 text-ink-faint">
-          {{ formHint }}
-        </p>
-
-        <div class="mt-3 flex justify-end gap-2">
-          <UButton
-            label="取消"
-            color="neutral"
-            variant="ghost"
-            :disabled="saving"
-            @click="cancelForm"
-          />
-          <UButton
-            :label="editingId ? '保存' : '添加'"
-            :loading="saving"
-            @click="saveTarget"
-          />
-        </div>
-      </div>
-
-      <UAlert
-        v-if="error"
-        color="error"
-        variant="soft"
-        title="目标设定操作失败"
-        :description="error"
-        class="mt-4"
-      />
-
-      <div v-if="pending" class="mt-6 space-y-5" aria-busy="true" aria-label="正在读取目标设定">
-        <div v-for="index in 2" :key="index" class="border-t border-rule pt-5">
-          <div class="h-6 w-32 animate-pulse rounded-sm bg-rule/50 motion-reduce:animate-none" />
-          <div class="mt-3 h-2 w-full animate-pulse rounded-sm bg-rule/40 motion-reduce:animate-none" />
-        </div>
-      </div>
-
-      <div v-else-if="!targets.length" class="py-14 text-center">
-        <div class="mx-auto flex size-12 items-center justify-center rounded-full border border-rule bg-paper/60">
-          <UIcon name="i-lucide-target" class="size-5 text-ink-faint" aria-hidden="true" />
-        </div>
-        <p class="mt-4 font-serif text-xl text-ink">
-          还没有目标设定
-        </p>
-        <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-ink-soft">
-          比如“连续 30 天”，或“累积 100 天”。
-        </p>
-      </div>
-
-      <ul v-else class="mt-2">
-        <li
-          v-for="target in targets"
-          :key="target.id"
-          class="border-t border-rule py-5 first:border-t-0 first:pt-4"
+        <div
+          class="mt-3 h-2.5 overflow-hidden rounded-full bg-rule/50 shadow-[inset_0_1px_2px_rgba(30,36,31,.12)]"
+          role="progressbar"
+          :aria-valuenow="percentOf(target)"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="`${typeLabel(target.type)} ${target.count} 天进度`"
         >
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <p class="text-xs text-ink-soft">
-                {{ typeLabel(target.type) }}
+          <div
+            class="h-full rounded-full bg-gradient-to-r from-done to-[#2f7a58] transition-[width] duration-500 motion-reduce:transition-none"
+            :style="{ width: `${percentOf(target)}%` }"
+          />
+        </div>
+
+        <div class="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-xs text-ink-soft">
+          <span>{{ progressSummary(target) }}</span>
+          <span class="tabular-nums">{{ percentOf(target) }}%</span>
+        </div>
+
+        <p class="mt-1 text-xs text-ink-faint">
+          从 {{ formatDate(target.progress.startDate) }} 开始计算
+          <span v-if="target.progress.achievedOn">
+            · 达成于 {{ formatDate(target.progress.achievedOn) }}
+          </span>
+        </p>
+
+        <div v-if="target.reward" class="reward-ticket mt-3 rounded-sm p-3">
+          <div class="flex items-start gap-2">
+            <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/50 ring-1 ring-brass/30">
+              <UIcon
+                name="i-lucide-gift"
+                class="size-4 text-brass-deep"
+                aria-hidden="true"
+              />
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs text-brass-deep/80">
+                奖励
               </p>
-              <p class="mt-0.5 font-serif text-2xl leading-8 text-ink">
-                {{ target.count }} 天
+              <p class="mt-0.5 font-serif text-base leading-6 text-brass-ink">
+                {{ target.reward }}
               </p>
             </div>
             <span
-              v-if="target.progress.achieved"
-              class="inline-flex items-center gap-1 rounded-sm bg-mist px-2 py-1 text-xs text-mist-ink"
+              v-if="target.rewardClaimedAt"
+              class="shrink-0 rounded-sm bg-white/60 px-2 py-1 text-xs text-brass-ink ring-1 ring-brass/30"
             >
-              <UIcon name="i-lucide-check" class="size-3" aria-hidden="true" />
-              已达成
+              已领取
             </span>
           </div>
 
-          <div
-            class="mt-3 h-2.5 overflow-hidden rounded-full bg-rule/50 shadow-[inset_0_1px_2px_rgba(30,36,31,.12)]"
-            role="progressbar"
-            :aria-valuenow="percentOf(target)"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            :aria-label="`${typeLabel(target.type)} ${target.count} 天进度`"
-          >
-            <div
-              class="h-full rounded-full bg-gradient-to-r from-done to-[#2f7a58] transition-[width] duration-500 motion-reduce:transition-none"
-              :style="{ width: `${percentOf(target)}%` }"
-            />
-          </div>
-
-          <div class="mt-2 flex flex-wrap items-baseline justify-between gap-2 text-xs text-ink-soft">
-            <span>{{ progressSummary(target) }}</span>
-            <span class="tabular-nums">{{ percentOf(target) }}%</span>
-          </div>
-
-          <p class="mt-1 text-xs text-ink-faint">
-            从 {{ formatDate(target.progress.startDate) }} 开始计算
-            <span v-if="target.progress.achievedOn">
-              · 达成于 {{ formatDate(target.progress.achievedOn) }}
+          <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <span v-if="target.rewardClaimedAt" class="text-xs text-brass-deep/80">
+              领取于 {{ formatTimestamp(target.rewardClaimedAt) }}
             </span>
-          </p>
+            <span v-else-if="target.progress.achieved" class="text-xs font-medium text-brass-deep">
+              奖励已解锁
+            </span>
+            <span v-else class="text-xs text-brass-deep/70">
+              达成后可领取
+            </span>
 
-          <div v-if="target.reward" class="reward-ticket mt-3 rounded-sm p-3">
-            <div class="flex items-start gap-2">
-              <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/50 ring-1 ring-brass/30">
-                <UIcon
-                  name="i-lucide-gift"
-                  class="size-4 text-brass-deep"
-                  aria-hidden="true"
-                />
-              </span>
-              <div class="min-w-0 flex-1">
-                <p class="text-xs text-brass-deep/80">
-                  奖励
-                </p>
-                <p class="mt-0.5 font-serif text-base leading-6 text-brass-ink">
-                  {{ target.reward }}
-                </p>
-              </div>
-              <span
+            <div class="flex items-center gap-1">
+              <UButton
+                v-if="target.progress.achieved && !target.rewardClaimedAt"
+                label="标记已领取"
+                icon="i-lucide-gift"
+                color="neutral"
+                variant="outline"
+                size="sm"
+                class="border-brass/40 bg-white/40 text-brass-ink hover:bg-white/70"
+                :loading="claimingId === target.id"
+                @click="setRewardClaimed(target, true)"
+              />
+              <UButton
                 v-if="target.rewardClaimedAt"
-                class="shrink-0 rounded-sm bg-white/60 px-2 py-1 text-xs text-brass-ink ring-1 ring-brass/30"
-              >
-                已领取
-              </span>
-            </div>
-
-            <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <span v-if="target.rewardClaimedAt" class="text-xs text-brass-deep/80">
-                领取于 {{ formatTimestamp(target.rewardClaimedAt) }}
-              </span>
-              <span v-else-if="target.progress.achieved" class="text-xs font-medium text-brass-deep">
-                奖励已解锁
-              </span>
-              <span v-else class="text-xs text-brass-deep/70">
-                达成后可领取
-              </span>
-
-              <div class="flex items-center gap-1">
-                <UButton
-                  v-if="target.progress.achieved && !target.rewardClaimedAt"
-                  label="标记已领取"
-                  icon="i-lucide-gift"
-                  color="neutral"
-                  variant="outline"
-                  size="sm"
-                  class="border-brass/40 bg-white/40 text-brass-ink hover:bg-white/70"
-                  :loading="claimingId === target.id"
-                  @click="setRewardClaimed(target, true)"
-                />
-                <UButton
-                  v-if="target.rewardClaimedAt"
-                  label="撤销领取"
-                  color="neutral"
-                  variant="ghost"
-                  size="sm"
-                  class="text-brass-deep hover:bg-white/50"
-                  :loading="claimingId === target.id"
-                  @click="setRewardClaimed(target, false)"
-                />
-              </div>
+                label="撤销领取"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                class="text-brass-deep hover:bg-white/50"
+                :loading="claimingId === target.id"
+                @click="setRewardClaimed(target, false)"
+              />
             </div>
           </div>
+        </div>
 
-          <div class="mt-3 flex justify-end gap-1">
-            <UButton
-              label="编辑"
-              icon="i-lucide-pencil"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              :disabled="saving || deletingId === target.id"
-              @click="openEdit(target)"
-            />
-            <UButton
-              label="删除"
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="ghost"
-              size="sm"
-              :loading="deletingId === target.id"
-              @click="deleteTarget(target)"
-            />
-          </div>
-        </li>
-      </ul>
-    </template>
+        <div class="mt-3 flex justify-end gap-1">
+          <UButton
+            label="编辑"
+            icon="i-lucide-pencil"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :disabled="saving || deletingId === target.id"
+            @click="openEdit(target)"
+          />
+          <UButton
+            label="删除"
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="ghost"
+            size="sm"
+            :loading="deletingId === target.id"
+            @click="deleteTarget(target)"
+          />
+        </div>
+      </li>
+    </ul>
 
     <template #footer>
       <div class="flex w-full justify-end">
@@ -518,5 +504,5 @@ async function setRewardClaimed(target: GoalTarget, claimed: boolean) {
         />
       </div>
     </template>
-  </UModal>
+  </AppModal>
 </template>

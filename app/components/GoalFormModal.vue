@@ -79,66 +79,63 @@ async function submit() {
 </script>
 
 <template>
-  <UModal
+  <AppModal
     :open="open"
     :title="heading"
+    description="这本书会出现在书架上，题目之后也能改。"
     :dismissible="!saving"
-    :transition="false"
-    :ui="{ content: 'modal-panel bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
     @update:open="emit('update:open', $event)"
   >
-    <template #body>
-      <form id="goal-form" class="flex flex-col gap-5" novalidate @submit.prevent="submit">
-        <div>
-          <div class="flex items-center justify-between gap-3">
-            <label for="goal-title" class="text-sm font-medium text-ink">
-              目标名称
-            </label>
-            <span class="text-xs tabular-nums text-ink-faint">
-              {{ title.length }}/{{ GOAL_TITLE_MAX_LENGTH }}
-            </span>
-          </div>
-          <UInput
-            id="goal-title"
-            v-model="title"
-            class="mt-2 w-full"
-            :maxlength="GOAL_TITLE_MAX_LENGTH"
-            placeholder="例如：每天散步二十分钟"
-            autofocus
-            autocomplete="off"
-            :disabled="saving"
-          />
+    <form id="goal-form" class="flex flex-col gap-5" novalidate @submit.prevent="submit">
+      <div>
+        <div class="flex items-center justify-between gap-3">
+          <label for="goal-title" class="text-sm font-medium text-ink">
+            目标名称
+          </label>
+          <span class="text-xs tabular-nums text-ink-faint">
+            {{ title.length }}/{{ GOAL_TITLE_MAX_LENGTH }}
+          </span>
         </div>
+        <UInput
+          id="goal-title"
+          v-model="title"
+          class="mt-2 w-full"
+          :maxlength="GOAL_TITLE_MAX_LENGTH"
+          placeholder="例如：每天散步二十分钟"
+          autofocus
+          autocomplete="off"
+          :disabled="saving"
+        />
+      </div>
 
-        <div>
-          <div class="flex items-center justify-between gap-3">
-            <label for="essay-title" class="text-sm font-medium text-ink">
-              随笔题目
-              <span class="font-normal text-ink-faint">选填</span>
-            </label>
-            <span class="text-xs tabular-nums text-ink-faint">
-              {{ essayTitle.length }}/{{ ESSAY_TITLE_MAX_LENGTH }}
-            </span>
-          </div>
-          <p class="mt-1 text-xs leading-5 text-ink-soft">
-            留空时，这本书就叫“随笔”。
-          </p>
-          <UInput
-            id="essay-title"
-            v-model="essayTitle"
-            class="mt-2 w-full"
-            :maxlength="ESSAY_TITLE_MAX_LENGTH"
-            placeholder="例如：论散步"
-            autocomplete="off"
-            :disabled="saving"
-          />
+      <div>
+        <div class="flex items-center justify-between gap-3">
+          <label for="essay-title" class="text-sm font-medium text-ink">
+            随笔题目
+            <span class="font-normal text-ink-faint">选填</span>
+          </label>
+          <span class="text-xs tabular-nums text-ink-faint">
+            {{ essayTitle.length }}/{{ ESSAY_TITLE_MAX_LENGTH }}
+          </span>
         </div>
-
-        <p v-if="error" class="text-sm text-miss" role="alert">
-          {{ error }}
+        <p class="mt-1 text-xs leading-5 text-ink-soft">
+          留空时，这本书就叫“随笔”。
         </p>
-      </form>
-    </template>
+        <UInput
+          id="essay-title"
+          v-model="essayTitle"
+          class="mt-2 w-full"
+          :maxlength="ESSAY_TITLE_MAX_LENGTH"
+          placeholder="例如：论散步"
+          autocomplete="off"
+          :disabled="saving"
+        />
+      </div>
+
+      <p v-if="error" class="text-sm text-miss" role="alert">
+        {{ error }}
+      </p>
+    </form>
 
     <template #footer>
       <div class="flex w-full justify-end gap-2">
@@ -154,9 +151,8 @@ async function submit() {
           form="goal-form"
           :label="submitLabel"
           :loading="saving"
-          @click="submit"
         />
       </div>
     </template>
-  </UModal>
+  </AppModal>
 </template>

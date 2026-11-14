@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ReviewItem, ReviewPage } from '#shared/types'
 import { todayDateOnly } from '#shared/utils/date'
-import { formatFullDayLabel, formatWeekday } from '~/utils/date-display'
+import { formatFullDayLabel } from '~/utils/date-display'
 
 useHead({ title: '回看 · Anti-Habit' })
 
@@ -9,7 +9,7 @@ const router = useRouter()
 const toast = useToast()
 
 const today = ref(todayDateOnly())
-const todayLabel = computed(() => `${formatFullDayLabel(today.value)}，${formatWeekday(today.value)}`)
+const todayLabel = computed(() => formatFullDayLabel(today.value))
 
 const items = ref<ReviewItem[]>([])
 const nextCursor = ref<string | null>(null)
@@ -105,22 +105,8 @@ onMounted(() => {
 
 <template>
   <div class="min-h-dvh">
-    <main class="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6 lg:py-10">
-      <header class="reveal flex flex-wrap items-center justify-between gap-4 border-b border-rule pb-5">
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <NuxtLink
-            to="/"
-            class="font-serif text-[1.6rem] leading-none tracking-tight text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
-          >
-            Anti-Habit
-          </NuxtLink>
-          <SiteNav active="review" />
-        </div>
-        <p class="hidden items-center gap-2 text-sm text-ink-soft sm:flex">
-          <span class="inline-block h-px w-6 bg-brass/70" aria-hidden="true" />
-          {{ todayLabel }}
-        </p>
-      </header>
+    <main class="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6 lg:px-10 lg:py-10">
+      <SiteHeader active="review" :today-label="todayLabel" />
 
       <section class="reveal reveal-late mt-8" aria-labelledby="review-heading">
         <div class="flex flex-wrap items-end justify-between gap-3 border-b border-rule pb-4">

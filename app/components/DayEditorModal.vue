@@ -75,29 +75,24 @@ function handleWriteNote() {
 </script>
 
 <template>
-  <UModal
+  <AppModal
     :open="open"
     :title="dateLabel"
     description="记下完成或未完成，也可以写点当时的情形。"
     :dismissible="!busy"
-    :transition="false"
-    scrollable
-    :ui="{ content: 'modal-panel bg-sheet', header: 'border-b border-rule', footer: 'border-t border-rule' }"
     @update:open="handleOpenChange"
   >
-    <template #body>
-      <DayEditorFields
-        id-prefix="modal"
-        v-model:status="status"
-        v-model:reflection="reflection"
-        v-model:linked-entry-ids="linkedEntryIds"
-        :candidates="candidates"
-        :candidates-pending="candidatesPending"
-        :candidates-error="candidatesError"
-        :error="error"
-        :busy="busy"
-      />
-    </template>
+    <DayEditorFields
+      id-prefix="modal"
+      v-model:status="status"
+      v-model:reflection="reflection"
+      v-model:linked-entry-ids="linkedEntryIds"
+      :candidates="candidates"
+      :candidates-pending="candidatesPending"
+      :candidates-error="candidatesError"
+      :error="error"
+      :busy="busy"
+    />
 
     <template #footer>
       <div class="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -139,5 +134,5 @@ function handleWriteNote() {
         </div>
       </div>
     </template>
-  </UModal>
+  </AppModal>
 </template>

@@ -3,7 +3,7 @@ import { addMonths, endOfMonth, endOfWeek, format, parseISO, startOfMonth, start
 import type { DailyEntryWithLinks, EssayEntry, Goal, GoalRelatedMemos, GoalSummary } from '#shared/types'
 import { getDayAppearance } from '#shared/utils/day-appearance'
 import { isValidDateOnly, todayDateOnly } from '#shared/utils/date'
-import { formatDateKey, formatDayLabel, formatFullDayLabel, formatMonthLabel, formatWeekday } from '~/utils/date-display'
+import { formatDateKey, formatDayLabel, formatFullDayLabel, formatMonthLabel } from '~/utils/date-display'
 import { dayStatusDot, dayStatusLabel } from '~/utils/day-display'
 import { markdownExcerpt } from '~/utils/markdown'
 
@@ -13,7 +13,7 @@ const route = useRoute()
 const router = useRouter()
 
 const today = ref(todayDateOnly())
-const todayLabel = computed(() => `${formatDayLabel(today.value)}，${formatWeekday(today.value)}`)
+const todayLabel = computed(() => formatFullDayLabel(today.value))
 
 function queryValue(key: string): string | null {
   const value = route.query[key]
@@ -310,27 +310,12 @@ onMounted(() => {
 
 <template>
   <div class="min-h-dvh">
-    <main class="mx-auto w-full max-w-6xl px-5 py-8 sm:px-6 lg:px-10 lg:py-12">
-      <header class="reveal flex flex-wrap items-end justify-between gap-4 border-b border-rule pb-6">
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <div>
-            <NuxtLink
-              to="/"
-              class="font-serif text-[1.7rem] leading-none tracking-tight text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-done"
-            >
-              Anti-Habit
-            </NuxtLink>
-            <p class="mt-2 flex items-center gap-2 text-sm text-ink-soft">
-              <span class="inline-block h-px w-6 bg-brass/70" aria-hidden="true" />
-              {{ todayLabel }}
-            </p>
-          </div>
-          <SiteNav active="habits" />
-        </div>
-        <p class="hidden max-w-[17rem] border-l border-rule-strong/70 pl-4 font-serif text-sm italic leading-6 text-ink-soft sm:block">
-          一次打卡，也可以是一篇随笔的开头。
-        </p>
-      </header>
+    <main class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-6 lg:px-10 lg:py-10">
+      <SiteHeader
+        active="habits"
+        :today-label="todayLabel"
+        note="一次打卡，也可以是一篇随笔的开头。"
+      />
 
       <UAlert
         v-if="error"
@@ -510,7 +495,7 @@ onMounted(() => {
 
               <div
                 v-if="selectedDayReflection"
-                class="mt-3 rounded-sm border-l-2 border-l-brass/70 bg-brass-soft/20 px-3 py-2"
+                class="mt-3 rounded-sm border-l border-l-brass/70 bg-brass-soft/20 px-3 py-2"
               >
                 <div class="flex items-baseline justify-between gap-2">
                   <p class="text-xs text-ink-faint">

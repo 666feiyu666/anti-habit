@@ -26,7 +26,7 @@ const editTarget = computed(() => props.item.goalDeletedAt
 
 <template>
   <article
-    class="relative border-b border-l-2 border-b-rule/70 border-l-brass/70 px-3 py-4 sm:px-4"
+    class="relative border-b border-l border-b-rule/70 border-l-brass/70 px-3 py-4 sm:px-4"
     :aria-label="`打卡反思，${entryLabel}`"
   >
     <header class="flex flex-wrap items-center gap-2 text-xs text-ink-faint">
