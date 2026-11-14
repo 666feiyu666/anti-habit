@@ -46,10 +46,11 @@ watch(() => props.open, (open) => {
 })
 
 const dateLabel = computed(() => props.date ? formatFullDayLabel(props.date) : '')
+const { confirm } = useConfirm()
 
-function handleOpenChange(value: boolean) {
+async function handleOpenChange(value: boolean) {
   if (value) return
-  if (requestClose()) emit('update:open', false)
+  if (await requestClose()) emit('update:open', false)
 }
 
 async function handleSave() {
@@ -60,11 +61,17 @@ async function handleClear() {
   if (await clear()) emit('update:open', false)
 }
 
-function handleWriteNote() {
+async function handleWriteNote() {
   if (busy.value) return
 
-  if (dirty.value && !window.confirm('这一天还有未保存的修改，仍然去写笔记吗？')) {
-    return
+  if (dirty.value) {
+    const ok = await confirm({
+      title: '还有未保存的修改',
+      description: '去写笔记会离开这个编辑器，未保存的修改会丢失。',
+      confirmLabel: '仍然去写',
+      tone: 'danger',
+    })
+    if (!ok) return
   }
 
   emit('writeNote', {

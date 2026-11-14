@@ -5,11 +5,13 @@ const props = withDefaults(defineProps<{
   description?: string
   size?: 'md' | 'lg' | 'xl'
   dismissible?: boolean
+  elevated?: boolean
 }>(), {
   title: undefined,
   description: undefined,
   size: 'md',
   dismissible: true,
+  elevated: false,
 })
 
 const emit = defineEmits<{
@@ -22,9 +24,11 @@ const sizeClass = computed(() => ({
   xl: 'sm:max-w-3xl',
 }[props.size]))
 
+const layerClass = computed(() => props.elevated ? 'z-[70]' : 'z-50')
+
 const ui = computed(() => ({
-  overlay: 'bg-ink/25 backdrop-blur-[1px]',
-  content: `modal-panel flex flex-col divide-y divide-rule rounded-md bg-sheet shadow-[0_24px_60px_-32px_rgba(30,36,31,0.45)] ring-rule focus:outline-none ${sizeClass.value}`,
+  overlay: `${layerClass.value} bg-ink/25 backdrop-blur-[1px]`,
+  content: `modal-panel flex flex-col divide-y divide-rule rounded-md bg-sheet shadow-[0_24px_60px_-32px_rgba(30,36,31,0.45)] ring-rule ${layerClass.value} focus:outline-none ${sizeClass.value}`,
   wrapper: 'min-w-0 flex-1',
   header: 'flex items-start gap-1.5 border-b border-rule px-5 pb-4 pt-5 sm:px-6',
   title: 'font-serif text-2xl leading-tight tracking-tight text-ink',

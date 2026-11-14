@@ -21,6 +21,7 @@ useHead({ title: '笔记 · Anti-Habit' })
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const { confirm } = useConfirm()
 
 const today = ref(todayDateOnly())
 const todayLabel = computed(() => formatFullDayLabel(today.value))
@@ -361,7 +362,13 @@ function handleUpdated(memo: Memo) {
 }
 
 async function handleDelete(item: FeedMemoItem) {
-  if (!window.confirm('删除这则笔记？它会从时间线隐藏，关联的打卡和目标不受影响。')) return
+  const ok = await confirm({
+    title: '删除这则笔记',
+    description: '它会从时间线隐藏，关联的打卡和目标不受影响。',
+    confirmLabel: '删除',
+    tone: 'danger',
+  })
+  if (!ok) return
 
   try {
     await $fetch(`/api/memos/${item.id}`, { method: 'DELETE' })

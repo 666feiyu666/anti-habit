@@ -16,6 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const { confirm } = useConfirm()
 const targets = ref<GoalTarget[]>([])
 const pending = ref(false)
 const error = ref('')
@@ -183,7 +184,14 @@ async function saveTarget() {
 async function deleteTarget(target: GoalTarget) {
   const goal = props.goal
   if (!goal) return
-  if (!window.confirm(`删除“${typeLabel(target.type)} ${target.count} 天”这个目标设定？`)) return
+
+  const ok = await confirm({
+    title: '删除目标设定',
+    description: `删除“${typeLabel(target.type)} ${target.count} 天”这个目标设定？`,
+    confirmLabel: '删除',
+    tone: 'danger',
+  })
+  if (!ok) return
 
   deletingId.value = target.id
   error.value = ''

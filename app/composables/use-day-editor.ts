@@ -29,6 +29,7 @@ function sameIds(left: string[], right: string[]) {
 
 export function useDayEditor(options: DayEditorOptions) {
   const toast = useToast()
+  const { confirm } = useConfirm()
   const status = ref<EntryStatus | null>(null)
   const reflection = ref('')
   const linkedEntryIds = ref<string[]>([])
@@ -170,10 +171,16 @@ export function useDayEditor(options: DayEditorOptions) {
     }
   }
 
-  function requestClose(): boolean {
+  async function requestClose(): Promise<boolean> {
     if (busy.value) return false
     if (!dirty.value) return true
-    return window.confirm('这一天还有未保存的内容，确定关闭吗？')
+
+    return confirm({
+      title: '这一天还没保存',
+      description: '关闭后，这次的完成状态、文字和关联都会丢失。',
+      confirmLabel: '放弃修改',
+      tone: 'danger',
+    })
   }
 
   return {

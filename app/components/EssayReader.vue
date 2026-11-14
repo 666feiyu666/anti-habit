@@ -23,6 +23,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const { confirm } = useConfirm()
 const view = ref<'essay' | 'materials'>('essay')
 
 const viewOptions = computed(() => [
@@ -117,10 +118,16 @@ watch(
   { immediate: true },
 )
 
-function setView(next: 'essay' | 'materials') {
+async function setView(next: 'essay' | 'materials') {
   if (next === view.value) return
-  if (next === 'essay' && materialDirty.value && !window.confirm('材料还有未保存的修改，确定离开吗？')) {
-    return
+  if (next === 'essay' && materialDirty.value) {
+    const ok = await confirm({
+      title: '材料还没保存',
+      description: '离开材料编辑后，这次未保存的修改会丢失。',
+      confirmLabel: '放弃修改',
+      tone: 'danger',
+    })
+    if (!ok) return
   }
   if (next === 'essay') {
     activeMaterial.value = null
@@ -131,7 +138,7 @@ function setView(next: 'essay' | 'materials') {
 }
 
 function handleViewChange(value: string) {
-  if (value === 'essay' || value === 'materials') setView(value)
+  if (value === 'essay' || value === 'materials') void setView(value)
 }
 
 function pickFile() {
@@ -200,8 +207,16 @@ async function openMaterial(material: GoalMaterialSummary) {
   }
 }
 
-function backToMaterials() {
-  if (materialDirty.value && !window.confirm('材料还有未保存的修改，确定返回吗？')) return
+async function backToMaterials() {
+  if (materialDirty.value) {
+    const ok = await confirm({
+      title: '材料还没保存',
+      description: '返回列表后，这次未保存的修改会丢失。',
+      confirmLabel: '放弃修改',
+      tone: 'danger',
+    })
+    if (!ok) return
+  }
   activeMaterial.value = null
   materialEditing.value = false
   materialError.value = ''
@@ -215,8 +230,16 @@ function startEditing() {
   materialError.value = ''
 }
 
-function cancelEditing() {
-  if (materialDirty.value && !window.confirm('放弃这些修改吗？')) return
+async function cancelEditing() {
+  if (materialDirty.value) {
+    const ok = await confirm({
+      title: '放弃这些修改？',
+      description: '材料会恢复到上次保存的内容。',
+      confirmLabel: '放弃修改',
+      tone: 'danger',
+    })
+    if (!ok) return
+  }
   materialEditing.value = false
   materialError.value = ''
 }
@@ -263,7 +286,14 @@ async function saveMaterial() {
 async function deleteMaterial(material: GoalMaterialSummary | GoalMaterial) {
   const id = goalId.value
   if (!id) return
-  if (!window.confirm(`删除材料《${material.title}》？`)) return
+
+  const ok = await confirm({
+    title: '删除材料',
+    description: `删除《${material.title}》？删除后不能恢复。`,
+    confirmLabel: '删除',
+    tone: 'danger',
+  })
+  if (!ok) return
 
   materialDeleting.value = true
   materialError.value = ''
@@ -305,9 +335,15 @@ function exportMarkdown() {
   URL.revokeObjectURL(url)
 }
 
-function handleOpenChange(value: boolean) {
-  if (!value && materialDirty.value && !window.confirm('材料还有未保存的修改，确定关闭吗？')) {
-    return
+async function handleOpenChange(value: boolean) {
+  if (!value && materialDirty.value) {
+    const ok = await confirm({
+      title: '材料还没保存',
+      description: '关闭后，这次未保存的材料修改会丢失。',
+      confirmLabel: '放弃修改',
+      tone: 'danger',
+    })
+    if (!ok) return
   }
   emit('update:open', value)
 }
